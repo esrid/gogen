@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/esrid/gogen/internal/config"
 	"github.com/esrid/gogen/internal/scaffold"
@@ -41,12 +42,17 @@ func runDestroyScaffold(_ *cobra.Command, args []string) error {
 	data := scaffold.NewData(modelName, nil, cfg)
 	n := strings.ToLower(modelName)
 
+	t := data.TableName
 	files := []string{
 		"internal/core/domains/" + n + ".go",
 		"internal/core/ports/" + n + "_port.go",
 		"internal/adapters/store/" + n + "_store.go",
 		"internal/core/services/" + n + "_service.go",
 		"internal/adapters/http/" + n + "_handler.go",
+		"web/templates/pages/" + t + "_index.html",
+		"web/templates/pages/" + t + "_show.html",
+		"web/templates/pages/" + t + "_new.html",
+		"web/templates/pages/" + t + "_edit.html",
 	}
 
 	fmt.Printf("\nRemoving %s scaffold...\n\n", modelName)
@@ -70,8 +76,23 @@ func runDestroyScaffold(_ *cobra.Command, args []string) error {
 		}
 	}
 
+	removeWireScaffold(data)
+	removeScaffoldMeta(gogenCfg, modelName)
+
 	fmt.Println("\nDone.")
 	return nil
+}
+
+func removeScaffoldMeta(cfg *config.GogenYAML, modelName string) {
+	if cfg.Scaffolds == nil {
+		return
+	}
+	delete(cfg.Scaffolds, modelName)
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(".gogen.yaml", data, 0644)
 }
 
 func removeFile(path string) error {

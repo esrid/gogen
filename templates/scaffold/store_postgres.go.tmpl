@@ -10,65 +10,38 @@ import (
 )
 
 func (s *Store) Create[[.ModelName]](ctx context.Context, p domains.[[.ModelName]]) (string, error) {
-	var id string
-	err := s.Pool.QueryRow(ctx,
+	rows, _ := s.Pool.Query(ctx,
 		`INSERT INTO [[.TableName]] ([[.InsertCols]]) VALUES ([[.PGInsert]]) RETURNING id`,
 		[[.InsertArgs]],
-	).Scan(&id)
-	return id, err
+	)
+	return pgx.CollectOneRow(rows, pgx.RowTo[string])
 }
 
 func (s *Store) Get[[.ModelName]](ctx context.Context, id string) (*domains.[[.ModelName]], error) {
-	p := new(domains.[[.ModelName]])
-	err := s.Pool.QueryRow(ctx,
+	rows, _ := s.Pool.Query(ctx,
 		`SELECT [[.SelectCols]] FROM [[.TableName]] WHERE id = $1`,
 		id,
-	).Scan([[.ScanArgs]])
+	)
+	p, err := pgx.CollectOneRow(rows, pgx.RowToStructByPos[domains.[[.ModelName]]])
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domains.ErrNotFound
 	}
-	return p, err
+	return &p, err
 }
 
 func (s *Store) List[[.ModelName]]s(ctx context.Context) ([]domains.[[.ModelName]], error) {
-	rows, err := s.Pool.Query(ctx,
+	rows, _ := s.Pool.Query(ctx,
 		`SELECT [[.SelectCols]] FROM [[.TableName]] ORDER BY created_at DESC`,
 	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []domains.[[.ModelName]]
-	for rows.Next() {
-		var p domains.[[.ModelName]]
-		if err := rows.Scan([[.ScanArgs]]); err != nil {
-			return nil, err
-		}
-		results = append(results, p)
-	}
-	return results, rows.Err()
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[domains.[[.ModelName]]])
 }
 [[range .Refs]]
 func (s *Store) [[.StoreMethod]](ctx context.Context, [[.ParamName]] string) ([]domains.[[$.ModelName]], error) {
-	rows, err := s.Pool.Query(ctx,
+	rows, _ := s.Pool.Query(ctx,
 		`SELECT [[$.SelectCols]] FROM [[$.TableName]] WHERE [[.FieldName]] = $1 ORDER BY created_at DESC`,
 		[[.ParamName]],
 	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []domains.[[$.ModelName]]
-	for rows.Next() {
-		var p domains.[[$.ModelName]]
-		if err := rows.Scan([[$.ScanArgs]]); err != nil {
-			return nil, err
-		}
-		results = append(results, p)
-	}
-	return results, rows.Err()
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[domains.[[$.ModelName]]])
 }
 [[end]]
 func (s *Store) Update[[.ModelName]](ctx context.Context, p domains.[[.ModelName]]) error {

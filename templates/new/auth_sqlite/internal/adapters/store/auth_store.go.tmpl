@@ -2,20 +2,12 @@ package store
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"errors"
-	"fmt"
 	"time"
 
 	"[[.ModulePath]]/internal/core/domains"
 )
-
-func generateID() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
-}
 
 func (s *Store) CreateUser(ctx context.Context, u domains.User) (string, string, error) {
 	id := generateID()

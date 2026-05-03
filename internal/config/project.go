@@ -36,9 +36,15 @@ func (p *ProjectConfig) Validate() error {
 	return nil
 }
 
+type ScaffoldMeta struct {
+	Fields    []string `yaml:"fields"`
+	Protected bool     `yaml:"protected,omitempty"`
+}
+
 type GogenYAML struct {
-	Module     string `yaml:"module"`
-	DB         string `yaml:"db"`
-	RenderMode string `yaml:"render_mode"`
-	Auth       bool   `yaml:"auth"`
+	Module     string                    `yaml:"module"`
+	DB         string                    `yaml:"db"`
+	RenderMode string                    `yaml:"render_mode"`
+	Auth       bool                      `yaml:"auth"`
+	Scaffolds  map[string]*ScaffoldMeta  `yaml:"scaffolds,omitempty"`
 }

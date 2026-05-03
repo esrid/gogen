@@ -1,0 +1,50 @@
+{{component "layout"}}
+  {{fill "title"}}New [[.ModelName]]{{end}}
+  {{fill "content"}}
+  <div class="container">
+    <h1>New [[.ModelName]]</h1>
+
+    <form method="POST" action="[[.RoutePrefix]]">
+[[- range .Fields]]
+[[- if .IsRef]]
+      <div class="field">
+        <label for="[[.Name]]">[[.GoName]]</label>
+        <input type="text" id="[[.Name]]" name="[[.Name]]" />
+      </div>
+[[- else if eq .GoType "bool"]]
+      <div class="field">
+        <label>
+          <input type="checkbox" name="[[.Name]]" value="on" />
+          [[.GoName]]
+        </label>
+      </div>
+[[- else if eq .GoType "int"]]
+      <div class="field">
+        <label for="[[.Name]]">[[.GoName]]</label>
+        <input type="number" id="[[.Name]]" name="[[.Name]]" value="0" />
+      </div>
+[[- else if eq .GoType "float64"]]
+      <div class="field">
+        <label for="[[.Name]]">[[.GoName]]</label>
+        <input type="number" step="any" id="[[.Name]]" name="[[.Name]]" value="0" />
+      </div>
+[[- else if eq .GoType "time.Time"]]
+      <div class="field">
+        <label for="[[.Name]]">[[.GoName]]</label>
+        <input type="datetime-local" id="[[.Name]]" name="[[.Name]]" />
+      </div>
+[[- else]]
+      <div class="field">
+        <label for="[[.Name]]">[[.GoName]]</label>
+        <input type="text" id="[[.Name]]" name="[[.Name]]" />
+      </div>
+[[- end]]
+[[- end]]
+      <div class="actions">
+        <button type="submit" class="btn">Create [[.ModelName]]</button>
+        <a href="[[.RoutePrefix]]">Cancel</a>
+      </div>
+    </form>
+  </div>
+  {{end}}
+{{end}}

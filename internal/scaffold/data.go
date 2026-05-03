@@ -43,7 +43,8 @@ type Data struct {
 	UpdateArgs     string // "p.Title, p.Body, p.ID"
 	PGUpdateWhereN string // "$3"
 
-	HasTimeImport bool
+	HasTimeImport  bool
+	NeedsStrconv   bool // any int or float field (needs strconv in SSR form parsing)
 
 	Protected     bool   // --protected flag: routes require auth
 	HasUserRef    bool   // has a user:references field
@@ -69,6 +70,9 @@ func NewData(modelName string, fields []Field, cfg *config.ProjectConfig) *Data 
 	for _, f := range fields {
 		if f.IsTime {
 			d.HasTimeImport = true
+		}
+		if f.GoType == "int" || f.GoType == "float64" {
+			d.NeedsStrconv = true
 		}
 		if f.IsRef {
 			// derive singular model name from table: "users" → "User"

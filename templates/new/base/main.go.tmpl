@@ -43,6 +43,7 @@ func main() {
 [[- end]]
 
 	handlers := &server.Handler{Store: dbStore}
+	// gogen:inject:services
 [[- if .Auth]]
 
 	emailProvider := email.NewNoopProvider()

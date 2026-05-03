@@ -7,10 +7,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
+	"github.com/esrid/gogen/internal/config"
 	"github.com/esrid/gogen/internal/render"
 	"github.com/esrid/gogen/internal/scaffold"
-	"github.com/esrid/gogen/internal/config"
 )
 
 var scaffoldCmd = &cobra.Command{
@@ -75,8 +76,30 @@ func runScaffold(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  dryrun  internal/adapters/store/migrations/NNNNN_create_%s.sql\n", data.TableName)
 	}
 
-	printScaffoldHint(data)
+	if !flagDryRun {
+		autoWireScaffold(data, gogenCfg.Module)
+		if err := saveScaffoldMeta(gogenCfg, modelName, fieldArgs, protected); err != nil {
+			fmt.Printf("  warn    could not save scaffold metadata: %v\n", err)
+		}
+	}
+
+	fmt.Println("\nDone.")
 	return nil
+}
+
+func saveScaffoldMeta(cfg *config.GogenYAML, modelName string, fieldArgs []string, protected bool) error {
+	if cfg.Scaffolds == nil {
+		cfg.Scaffolds = make(map[string]*config.ScaffoldMeta)
+	}
+	cfg.Scaffolds[modelName] = &config.ScaffoldMeta{
+		Fields:    fieldArgs,
+		Protected: protected,
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(".gogen.yaml", data, 0644)
 }
 
 type scaffoldSpec struct {
@@ -86,20 +109,36 @@ type scaffoldSpec struct {
 
 func scaffoldSpecs(data *scaffold.Data) []scaffoldSpec {
 	n := strings.ToLower(data.ModelName)
-	db := data.DB
 
 	storeTemplate := "scaffold/store_sqlite.go.tmpl"
-	if db == "postgres" {
+	if data.DB == "postgres" {
 		storeTemplate = "scaffold/store_postgres.go.tmpl"
 	}
 
-	return []scaffoldSpec{
+	handlerTemplate := "scaffold/handler.go.tmpl"
+	if data.IsSSR() {
+		handlerTemplate = "scaffold/handler_ssr.go.tmpl"
+	}
+
+	specs := []scaffoldSpec{
 		{"scaffold/domain.go.tmpl", "internal/core/domains/" + n + ".go"},
 		{"scaffold/port.go.tmpl", "internal/core/ports/" + n + "_port.go"},
 		{storeTemplate, "internal/adapters/store/" + n + "_store.go"},
 		{"scaffold/service.go.tmpl", "internal/core/services/" + n + "_service.go"},
-		{"scaffold/handler.go.tmpl", "internal/adapters/http/" + n + "_handler.go"},
+		{handlerTemplate, "internal/adapters/http/" + n + "_handler.go"},
 	}
+
+	if data.IsSSR() {
+		t := data.TableName
+		specs = append(specs,
+			scaffoldSpec{"scaffold/pages/index.html.tmpl", "web/templates/pages/" + t + "_index.html"},
+			scaffoldSpec{"scaffold/pages/show.html.tmpl", "web/templates/pages/" + t + "_show.html"},
+			scaffoldSpec{"scaffold/pages/new.html.tmpl", "web/templates/pages/" + t + "_new.html"},
+			scaffoldSpec{"scaffold/pages/edit.html.tmpl", "web/templates/pages/" + t + "_edit.html"},
+		)
+	}
+
+	return specs
 }
 
 func writeScaffoldFile(tmplPath, outPath string, data *scaffold.Data) error {
@@ -159,36 +198,3 @@ func createScaffoldMigration(data *scaffold.Data) error {
 	return nil
 }
 
-func printScaffoldHint(data *scaffold.Data) {
-	n := strings.ToLower(data.ModelName)
-
-	var mountHint string
-	if data.Protected {
-		mountHint = fmt.Sprintf(`       // inside the protected r.Group (with RequireAuth middleware)
-       if h.%s != nil {
-           r.Mount("%s", h.%s.Route())
-       }`, data.ModelName, data.RoutePrefix, data.ModelName)
-	} else {
-		mountHint = fmt.Sprintf(`       if h.%s != nil {
-           r.Mount("%s", h.%s.Route())
-       }`, data.ModelName, data.RoutePrefix, data.ModelName)
-	}
-
-	fmt.Printf(`
-Done! Wire it up in your project:
-
-1. internal/server/routes.go — add to Handler struct:
-       %s *api.%sHandler
-
-2. internal/server/routes.go — add to NewRouter:
-%s
-
-3. main.go — add after store init:
-       %sService := services.New%sService(dbStore)
-       handlers.%s = api.New%sHandler(%sService)
-`,
-		n, data.ModelName,
-		mountHint,
-		n, data.ModelName, data.ModelName, data.ModelName, n,
-	)
-}

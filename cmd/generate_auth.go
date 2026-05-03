@@ -63,6 +63,7 @@ func runGenerateAuth(_ *cobra.Command, _ []string) error {
 		if err := setAuthInGogenYAML(gogenCfg); err != nil {
 			return fmt.Errorf("update .gogen.yaml: %w", err)
 		}
+		reWireAllScaffolds(gogenCfg)
 		return generator.PostProcess(".")
 	}
 
