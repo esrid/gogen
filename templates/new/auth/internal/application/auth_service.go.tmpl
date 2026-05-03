@@ -1,0 +1,135 @@
+package application
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"time"
+
+	"[[.ModulePath]]/internal/domain"
+	"[[.ModulePath]]/internal/utils"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+type AuthService struct {
+	store         domain.UserStore
+	emailProvider domain.EmailProvider
+}
+
+func NewAuthService(store domain.UserStore, emailProvider domain.EmailProvider) *AuthService {
+	return &AuthService{store: store, emailProvider: emailProvider}
+}
+
+func (s *AuthService) Login(ctx context.Context, email, password, timezone string) (string, string, error) {
+	user, err := s.store.QueryUserByEmail(ctx, email)
+	if err != nil {
+		return "", "", err
+	}
+
+	if user.PasswordHash == nil {
+		return "", "", domain.ErrOauthUser
+	}
+
+	prehashed := utils.PreHashing(password)
+	if err = bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(prehashed)); err != nil {
+		return "", "", domain.ErrInvalidCredentials
+	}
+
+	token, err := s.store.CreateSessionForUser(ctx, user.ID)
+	if err != nil {
+		return "", "", err
+	}
+
+	return user.ID, token, nil
+}
+
+func (s *AuthService) Signup(ctx context.Context, u *domain.NewUser) (string, string, error) {
+	hashed, err := utils.HashPassword(u.Password)
+	if err != nil {
+		return "", "", err
+	}
+
+	user := domain.User{
+		Email:        u.Email,
+		Timezone:     u.Timezone,
+		PasswordHash: &hashed,
+	}
+
+	id, token, err := s.store.CreateUser(ctx, user)
+	if err != nil {
+		return "", "", err
+	}
+
+	go func() {
+		_ = s.emailProvider.SendWelcome(context.Background(), u.Email)
+	}()
+
+	return id, token, nil
+}
+
+func (s *AuthService) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {
+	user, err := s.store.QueryUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if user.PasswordHash == nil {
+		return domain.ErrOauthUser
+	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(utils.PreHashing(oldPassword))); err != nil {
+		return domain.ErrInvalidCredentials
+	}
+
+	hashed, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	return s.store.UpdatePassword(ctx, userID, hashed)
+}
+
+func (s *AuthService) DeleteAccount(ctx context.Context, userID string) error {
+	return s.store.DeleteUser(ctx, userID)
+}
+
+func (s *AuthService) ForgotPassword(ctx context.Context, emailAddr, ipAddress string) error {
+	canRequest, err := s.store.CanRequestPasswordReset(ctx, emailAddr, ipAddress)
+	if err != nil || !canRequest {
+		return nil
+	}
+
+	user, err := s.store.QueryUserByEmail(ctx, emailAddr)
+	if err != nil || user.PasswordHash == nil {
+		return nil
+	}
+
+	token, err := generateSecureToken(32)
+	if err != nil {
+		return err
+	}
+
+	if err = s.store.CreatePasswordResetToken(ctx, user.ID, token, time.Now().Add(time.Hour)); err != nil {
+		return err
+	}
+
+	return s.emailProvider.SendPasswordReset(ctx, emailAddr, token)
+}
+
+func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
+	hashed, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return errors.New("failed to hash password")
+	}
+	return s.store.ResetPassword(ctx, token, hashed)
+}
+
+func generateSecureToken(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}

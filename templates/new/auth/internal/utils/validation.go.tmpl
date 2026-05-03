@@ -1,0 +1,43 @@
+package utils
+
+import (
+	"crypto/sha256"
+	"encoding/base64"
+	"errors"
+	"strings"
+
+	"[[.ModulePath]]/internal/domain"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+func NewUserValidation(u *domain.NewUser) error {
+	u.Email = strings.ToLower(strings.TrimSpace(u.Email))
+	if u.Email == "" {
+		return errors.New("email is required")
+	}
+	if u.Password == "" || u.Repeat == "" {
+		return errors.New("password is required")
+	}
+	if u.Password != u.Repeat {
+		return errors.New("passwords do not match")
+	}
+	if len(u.Password) < 8 {
+		return errors.New("password too short")
+	}
+	if len(u.Password) > 72 {
+		return errors.New("password too long")
+	}
+	return nil
+}
+
+func HashPassword(password string) (string, error) {
+	h := PreHashing(password)
+	hash, err := bcrypt.GenerateFromPassword([]byte(h), bcrypt.DefaultCost)
+	return string(hash), err
+}
+
+func PreHashing(password string) string {
+	h := sha256.Sum256([]byte(password))
+	return base64.StdEncoding.EncodeToString(h[:])
+}

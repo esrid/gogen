@@ -1,0 +1,47 @@
+package auth
+
+import "[[.ModulePath]]/web/layouts"
+
+templ Login(err, msg string) {
+	@layouts.Layout("Login") {
+		<div class="flex justify-center items-center py-12">
+			<div class="card w-96 bg-base-100 shadow-xl">
+				<div class="card-body">
+					<h2 class="card-title justify-center mb-4">Login</h2>
+					
+					if err != "" {
+						<div class="alert alert-error mb-4">
+							<span>{ err }</span>
+						</div>
+					}
+					if msg != "" {
+						<div class="alert alert-info mb-4">
+							<span>{ msg }</span>
+						</div>
+					}
+
+					<form method="POST" action="/auth/login">
+						<div class="form-control w-full">
+							<label class="label">
+								<span class="label-text">Email</span>
+							</label>
+							<input type="email" name="email" class="input input-bordered w-full" required />
+						</div>
+						<div class="form-control w-full mt-4">
+							<label class="label">
+								<span class="label-text">Password</span>
+							</label>
+							<input type="password" name="password" class="input input-bordered w-full" required />
+						</div>
+						<div class="card-actions mt-6">
+							<button type="submit" class="btn btn-primary w-full">Login</button>
+						</div>
+					</form>
+					<div class="text-center mt-4">
+						<a href="/auth/signup" class="text-sm link link-hover">Don't have an account? Sign up</a>
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+}

@@ -1,6 +1,6 @@
 module github.com/esrid/gogen
 
-go 1.27
+go 1.26
 
 require (
 	github.com/charmbracelet/huh v1.0.0

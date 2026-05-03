@@ -1,63 +1,7 @@
 package main
 
-import (
-	"context"
-	"log/slog"
-	"net"
-	"net/http"
-	"os"
-	"time"
-
-	"[[.ModulePath]]/internal/adapters/store"
-	"[[.ModulePath]]/internal/server"
-[[- if .IsSSR]]
-	"[[.ModulePath]]/web"
-[[- end]]
-)
+import "[[.ModulePath]]/bootstrap"
 
 func main() {
-	cfg := server.Load()
-	ctx := context.Background()
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-
-[[- if .IsSQLite]]
-	dbStore, err := store.NewStore(ctx)
-[[- else]]
-	dbStore, err := store.NewStore(ctx, cfg.DatabaseURL)
-[[- end]]
-	if err != nil {
-		logger.Error("unable to connect to database", slog.String("error", err.Error()))
-		return
-	}
-[[- if .IsSQLite]]
-
-	if err := dbStore.RunMigrations(ctx, logger); err != nil {
-		logger.Error("unable to run migrations", slog.String("error", err.Error()))
-		return
-	}
-[[- end]]
-
-	handlers := server.WireHandlers(dbStore, logger)
-[[- if .IsSSR]]
-
-	staticHandler := web.GetStaticHandler()
-[[- end]]
-
-	mux := server.NewRouter(handlers, [[if .IsSSR]]staticHandler[[else]]nil[[end]])
-
-	s := &http.Server{
-		Addr:              cfg.ServerPort,
-		Handler:           mux,
-		ReadTimeout:       5 * time.Second,
-		ReadHeaderTimeout: 2 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       120 * time.Second,
-		MaxHeaderBytes:    1 << 20,
-		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
-		BaseContext: func(l net.Listener) context.Context {
-			return ctx
-		},
-	}
-
-	server.RunServer(ctx, logger, s)
+	bootstrap.Run()
 }

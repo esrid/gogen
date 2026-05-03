@@ -44,12 +44,13 @@ func runDestroyScaffold(_ *cobra.Command, args []string) error {
 
 	t := data.TableName
 	files := []string{
-		"internal/core/domains/" + n + ".go",
-		"internal/core/ports/" + n + "_port.go",
-		"internal/adapters/store/" + n + "_store.go",
-		"internal/core/services/" + n + "_service.go",
-		"internal/adapters/http/" + n + "_handler.go",
-		"internal/adapters/http/" + n + "_api_handler.go",
+		"internal/domain/" + n + ".go",
+		"internal/domain/" + n + "_port.go",
+		"internal/adapters/db/" + n + "_store.go",
+		"internal/application/" + n + "_service.go",
+		"internal/adapters/api/" + n + "_handler.go",
+		"internal/adapters/api/" + n + "_api_handler.go",
+		"internal/adapters/web/" + n + "_handler.go",
 		"web/templates/pages/" + t + "_index.html",
 		"web/templates/pages/" + t + "_show.html",
 		"web/templates/pages/" + t + "_new.html",
@@ -65,7 +66,7 @@ func runDestroyScaffold(_ *cobra.Command, args []string) error {
 	}
 
 	// Find and remove matching migration(s)
-	migrations, err := findMigrations("internal/adapters/store/migrations", "create_"+data.TableName)
+	migrations, err := findMigrations("internal/adapters/db/migrations", "create_"+data.TableName)
 	if err != nil {
 		return err
 	}

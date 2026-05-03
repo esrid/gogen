@@ -1,4 +1,4 @@
-package http
+package web
 
 import (
 	"net/http"
@@ -11,44 +11,44 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"[[.ModulePath]]/internal/core/domains"
-	"[[.ModulePath]]/internal/core/ports"
+	"[[.ModulePath]]/internal/domain"
 	"[[.ModulePath]]/web"
+	"[[.ModulePath]]/web/components/[[.ModelNameLC]]"
 )
 
 type [[.ModelName]]Handler struct {
-	service ports.[[.ModelName]]Service
+	service domain.[[.ModelName]]Service
 }
 
-func New[[.ModelName]]Handler(service ports.[[.ModelName]]Service) *[[.ModelName]]Handler {
+func New[[.ModelName]]Handler(service domain.[[.ModelName]]Service) *[[.ModelName]]Handler {
 	return &[[.ModelName]]Handler{service: service}
 }
 
-func (h *[[.ModelName]]Handler) Route() http.Handler {
-	r := chi.NewRouter()
-	r.Get("/", h.index)
-	r.Get("/new", h.newForm)
-	r.Post("/", h.create)
-	r.Get("/{id}", h.show)
-	r.Get("/{id}/edit", h.editForm)
-	r.Post("/{id}", h.update)
-	r.Post("/{id}/delete", h.delete)
+func (h *[[.ModelName]]Handler) Register(r chi.Router) {
+	r.Route("[[.RoutePrefix]]", func(r chi.Router) {
+		r.Get("/", h.index)
+		r.Get("/new", h.newForm)
+		r.Post("/", h.create)
+		r.Get("/{id}", h.show)
+		r.Get("/{id}/edit", h.editForm)
+		r.Post("/{id}", h.update)
+		r.Post("/{id}/delete", h.delete)
 [[- range .Refs]][[- if not .IsUserRef]]
-	r.Get("/by-[[.URLSegment]]/{[[.ParamName]]}", h.listBy[[.RefModel]])
+		r.Get("/by-[[.URLSegment]]/{[[.ParamName]]}", h.listBy[[.RefModel]])
 [[- end]][[- end]]
-	return r
+	})
 }
 
 func (h *[[.ModelName]]Handler) index(w http.ResponseWriter, r *http.Request) {
 [[- if and .Protected .HasUserRef]]
-	userID := domains.GetContextUser(r.Context())
+	userID := domain.GetContextUser(r.Context())
 	if userID == "" {
 		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 		return
 	}
 	items, err := h.service.[[.UserRef.ServiceMethod]](r.Context(), userID)
 [[- else if .Protected]]
-	if domains.GetContextUser(r.Context()) == "" {
+	if domain.GetContextUser(r.Context()) == "" {
 		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 		return
 	}
@@ -57,43 +57,39 @@ func (h *[[.ModelName]]Handler) index(w http.ResponseWriter, r *http.Request) {
 	items, err := h.service.List(r.Context())
 [[- end]]
 	if err != nil {
-		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
+		web.Render(w, r, web.Error(err.Error()))
 		return
 	}
-	web.Render(w, "[[.TableName]]_index.html", map[string]any{
-		"[[.ModelNamePlural]]": items,
-	})
+	web.Render(w, r, [[.ModelNameLC]].Index(items))
 }
 
 func (h *[[.ModelName]]Handler) show(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	item, err := h.service.Get(r.Context(), id)
 	if err != nil {
-		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
+		web.Render(w, r, web.Error(err.Error()))
 		return
 	}
-	web.Render(w, "[[.TableName]]_show.html", map[string]any{
-		"[[.ModelName]]": item,
-	})
+	web.Render(w, r, [[.ModelNameLC]].Show(item))
 }
 
 func (h *[[.ModelName]]Handler) newForm(w http.ResponseWriter, r *http.Request) {
-	web.Render(w, "[[.TableName]]_new.html", nil)
+	web.Render(w, r, [[.ModelNameLC]].New())
 }
 
 func (h *[[.ModelName]]Handler) create(w http.ResponseWriter, r *http.Request) {
 [[- if .Protected]]
-	userID := domains.GetContextUser(r.Context())
+	userID := domain.GetContextUser(r.Context())
 	if userID == "" {
 		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 		return
 	}
 [[- end]]
 	if err := r.ParseForm(); err != nil {
-		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
+		web.Render(w, r, web.Error(err.Error()))
 		return
 	}
-	var m domains.[[.ModelName]]
+	var m domain.[[.ModelName]]
 [[- range .Fields]]
 [[- if .IsRef]]
 	m.[[.GoName]] = r.FormValue("[[.Name]]")
@@ -120,7 +116,7 @@ func (h *[[.ModelName]]Handler) create(w http.ResponseWriter, r *http.Request) {
 [[- end]]
 	created, err := h.service.Create(r.Context(), m)
 	if err != nil {
-		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
+		web.Render(w, r, web.Error(err.Error()))
 		return
 	}
 	http.Redirect(w, r, "[[.RoutePrefix]]/"+created.ID, http.StatusSeeOther)
@@ -130,21 +126,19 @@ func (h *[[.ModelName]]Handler) editForm(w http.ResponseWriter, r *http.Request)
 	id := chi.URLParam(r, "id")
 	item, err := h.service.Get(r.Context(), id)
 	if err != nil {
-		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
+		web.Render(w, r, web.Error(err.Error()))
 		return
 	}
-	web.Render(w, "[[.TableName]]_edit.html", map[string]any{
-		"[[.ModelName]]": item,
-	})
+	web.Render(w, r, [[.ModelNameLC]].Edit(item))
 }
 
 func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := r.ParseForm(); err != nil {
-		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
+		web.Render(w, r, web.Error(err.Error()))
 		return
 	}
-	var m domains.[[.ModelName]]
+	var m domain.[[.ModelName]]
 	m.ID = id
 [[- range .Fields]]
 [[- if .IsRef]]
@@ -167,7 +161,7 @@ func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
 [[- end]]
 [[- end]]
 	if err := h.service.Update(r.Context(), m); err != nil {
-		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
+		web.Render(w, r, web.Error(err.Error()))
 		return
 	}
 	http.Redirect(w, r, "[[.RoutePrefix]]/"+id, http.StatusSeeOther)
@@ -176,7 +170,7 @@ func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
 func (h *[[.ModelName]]Handler) delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.service.Delete(r.Context(), id); err != nil {
-		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
+		web.Render(w, r, web.Error(err.Error()))
 		return
 	}
 	http.Redirect(w, r, "[[.RoutePrefix]]", http.StatusSeeOther)
@@ -186,11 +180,9 @@ func (h *[[$.ModelName]]Handler) listBy[[.RefModel]](w http.ResponseWriter, r *h
 	[[.ParamName]] := chi.URLParam(r, "[[.ParamName]]")
 	items, err := h.service.[[.ServiceMethod]](r.Context(), [[.ParamName]])
 	if err != nil {
-		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
+		web.Render(w, r, web.Error(err.Error()))
 		return
 	}
-	web.Render(w, "[[$.TableName]]_index.html", map[string]any{
-		"[[$.ModelNamePlural]]": items,
-	})
+	web.Render(w, r, [[$.ModelNameLC]].Index(items))
 }
 [[end]][[end]]

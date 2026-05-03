@@ -1,0 +1,185 @@
+package db
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"time"
+
+	"[[.ModulePath]]/internal/domain"
+)
+
+func (s *Store) CreateUser(ctx context.Context, u domain.User) (string, string, error) {
+	id := generateID()
+	token := generateID()
+
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return "", "", err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO users (id, email, password_hash, timezone) VALUES (?, ?, ?, ?)`,
+		id, u.Email, u.PasswordHash, u.Timezone,
+	)
+	if err != nil {
+		return "", "", err
+	}
+
+	sessionID := generateID()
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO sessions (id, user_id, token, expires_at) VALUES (?, ?, ?, DATETIME('now', '+30 days'))`,
+		sessionID, id, token,
+	)
+	if err != nil {
+		return "", "", err
+	}
+
+	return id, token, tx.Commit()
+}
+
+func (s *Store) QueryUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	u := new(domain.User)
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT id, email, password_hash, full_name, avatar_url, timezone FROM users WHERE email = ? AND deleted_at IS NULL`,
+		email,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.FullName, &u.AvatarURL, &u.Timezone)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrUserNotFound
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+func (s *Store) QueryUserByID(ctx context.Context, id string) (*domain.User, error) {
+	u := new(domain.User)
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT id, email, password_hash, full_name, avatar_url, timezone FROM users WHERE id = ? AND deleted_at IS NULL`,
+		id,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.FullName, &u.AvatarURL, &u.Timezone)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrUserNotFound
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+func (s *Store) CreateSessionForUser(ctx context.Context, userID string) (string, error) {
+	token := generateID()
+	sessionID := generateID()
+	_, err := s.DB.ExecContext(ctx,
+		`INSERT INTO sessions (id, user_id, token, expires_at) VALUES (?, ?, ?, DATETIME('now', '+30 days'))`,
+		sessionID, userID, token,
+	)
+	return token, err
+}
+
+func (s *Store) GetUserFromToken(ctx context.Context, token string) (string, *time.Time, error) {
+	var userID string
+	var expiresAt time.Time
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT user_id, expires_at FROM sessions WHERE token = ?`,
+		token,
+	).Scan(&userID, &expiresAt)
+	if err != nil {
+		return "", nil, err
+	}
+	return userID, &expiresAt, nil
+}
+
+func (s *Store) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
+	_, err := s.DB.ExecContext(ctx,
+		`UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		hashedPassword, userID,
+	)
+	return err
+}
+
+func (s *Store) DeleteUser(ctx context.Context, userID string) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err = tx.ExecContext(ctx, `UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?`, userID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) CreatePasswordResetToken(ctx context.Context, userID, token string, expiresAt time.Time) error {
+	id := generateID()
+	_, err := s.DB.ExecContext(ctx,
+		`INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)`,
+		id, userID, token, expiresAt,
+	)
+	return err
+}
+
+func (s *Store) ResetPassword(ctx context.Context, token, hashedPassword string) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var userID string
+	var expiresAt time.Time
+	var used bool
+	err = tx.QueryRowContext(ctx,
+		`SELECT user_id, expires_at, used FROM password_reset_tokens WHERE token = ?`,
+		token,
+	).Scan(&userID, &expiresAt, &used)
+	if errors.Is(err, sql.ErrNoRows) {
+		return errors.New("invalid token")
+	}
+	if err != nil {
+		return err
+	}
+	if time.Now().After(expiresAt) {
+		return errors.New("token expired")
+	}
+	if used {
+		return errors.New("token already used")
+	}
+
+	if _, err = tx.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, hashedPassword, userID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE password_reset_tokens SET used = 1 WHERE token = ?`, token); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) CanRequestPasswordReset(ctx context.Context, email, ipAddress string) (bool, error) {
+	var count int
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM password_reset_attempts WHERE email = ? AND attempted_at > DATETIME('now', '-1 hour')`,
+		email,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	if count >= 3 {
+		return false, nil
+	}
+	id := generateID()
+	_, err = s.DB.ExecContext(ctx,
+		`INSERT INTO password_reset_attempts (id, email, ip_address) VALUES (?, ?, ?)`,
+		id, email, ipAddress,
+	)
+	return true, err
+}

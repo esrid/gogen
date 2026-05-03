@@ -1,0 +1,38 @@
+package bootstrap
+
+import (
+	"log/slog"
+[[- if .Auth]]
+
+	"[[.ModulePath]]/internal/adapters/api"
+	"[[.ModulePath]]/internal/adapters/external/email"
+	"[[.ModulePath]]/internal/application"
+	"[[.ModulePath]]/internal/domain"
+[[- end]]
+	"[[.ModulePath]]/internal/adapters/db"
+)
+
+type Handlers struct {
+	Store *db.Store
+[[- if .Auth]]
+	Auth           *api.AuthHandler
+	SessionService domain.SessionService
+[[- end]]
+
+	PublicControllers    []api.Controller
+	ProtectedControllers []api.Controller
+}
+
+func WireHandlers(dbStore *db.Store, logger *slog.Logger) *Handlers {
+	h := &Handlers{Store: dbStore}
+[[- if .Auth]]
+
+	emailProvider := email.NewNoopProvider()
+	sessionSvc := application.NewSessionService(dbStore)
+	h.SessionService = sessionSvc
+	h.Auth = api.NewAuthHandler(application.NewAuthService(dbStore, emailProvider), dbStore, sessionSvc, logger)
+
+	h.PublicControllers = append(h.PublicControllers, h.Auth)
+[[- end]]
+	return h
+}

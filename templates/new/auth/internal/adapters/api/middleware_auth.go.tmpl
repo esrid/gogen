@@ -1,0 +1,29 @@
+package api
+
+import (
+	"context"
+	"net/http"
+
+	"[[.ModulePath]]/internal/domain"
+)
+
+func RequireAuth(sessionService domain.SessionService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cookie, err := r.Cookie("session_token")
+			if err != nil {
+				http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+				return
+			}
+
+			userID, err := sessionService.Validate(r.Context(), cookie.Value)
+			if err != nil {
+				http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), domain.UserContextKey, userID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}

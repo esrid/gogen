@@ -43,7 +43,8 @@ func runGenerateAuth(_ *cobra.Command, _ []string) error {
 	// infra = always overwrite (wiring files that change when auth is added)
 	infra, new := authFileSpecs(cfg)
 
-	fmt.Println("\nAdding auth...\n")
+	fmt.Println("\nAdding auth...")
+	fmt.Println()
 
 	for _, spec := range infra {
 		if err := writeAuthFile(spec, cfg, true); err != nil {
@@ -113,27 +114,26 @@ func writeAuthFile(spec generator.FileSpec, cfg *config.ProjectConfig, force boo
 func authFileSpecs(cfg *config.ProjectConfig) (infra, new []generator.FileSpec) {
 	infra = []generator.FileSpec{
 		generator.S("new/base/main.go.tmpl", "main.go"),
-		generator.S("new/base/internal/server/routes.go.tmpl", "internal/server/routes.go"),
-		generator.S("new/base/internal/server/wire_gen.go.tmpl", "internal/server/wire_gen.go"),
-		generator.S("new/base/internal/core/domains/errors.go.tmpl", "internal/core/domains/errors.go"),
+		generator.S("new/base/bootstrap/router.go.tmpl", "bootstrap/router.go"),
+		generator.S("new/base/internal/domain/errors.go.tmpl", "internal/domain/errors.go"),
 	}
 
 	new = []generator.FileSpec{
-		generator.S("new/auth/internal/core/domains/user.go.tmpl", "internal/core/domains/user.go"),
-		generator.S("new/auth/internal/core/ports/auth_port.go.tmpl", "internal/core/ports/auth_port.go"),
-		generator.S("new/auth/internal/core/ports/email_port.go.tmpl", "internal/core/ports/email_port.go"),
-		generator.S("new/auth/internal/core/services/auth_service.go.tmpl", "internal/core/services/auth_service.go"),
-		generator.S("new/auth/internal/core/services/session_service.go.tmpl", "internal/core/services/session_service.go"),
-		generator.S("new/auth/internal/core/utils/validation.go.tmpl", "internal/core/utils/validation.go"),
-		generator.S("new/auth/internal/adapters/http/auth_handler.go.tmpl", "internal/adapters/http/auth_handler.go"),
-		generator.S("new/auth/internal/adapters/http/middleware_auth.go.tmpl", "internal/adapters/http/middleware_auth.go"),
+		generator.S("new/auth/internal/domain/user.go.tmpl", "internal/domain/user.go"),
+		generator.S("new/auth/internal/domain/auth_port.go.tmpl", "internal/domain/auth_port.go"),
+		generator.S("new/auth/internal/domain/email_port.go.tmpl", "internal/domain/email_port.go"),
+		generator.S("new/auth/internal/application/auth_service.go.tmpl", "internal/application/auth_service.go"),
+		generator.S("new/auth/internal/application/session_service.go.tmpl", "internal/application/session_service.go"),
+		generator.S("new/auth/internal/utils/validation.go.tmpl", "internal/utils/validation.go"),
+		generator.S("new/auth/internal/adapters/api/auth_handler.go.tmpl", "internal/adapters/api/auth_handler.go"),
+		generator.S("new/auth/internal/adapters/api/middleware_auth.go.tmpl", "internal/adapters/api/middleware_auth.go"),
 		generator.S("new/auth/internal/adapters/external/email/noop.go.tmpl", "internal/adapters/external/email/noop.go"),
 	}
 
 	if cfg.IsSQLite() {
-		new = append(new, generator.S("new/auth_sqlite/internal/adapters/store/auth_store.go.tmpl", "internal/adapters/store/auth_store.go"))
+		new = append(new, generator.S("new/auth_sqlite/internal/adapters/db/auth_store.go.tmpl", "internal/adapters/db/auth_store.go"))
 	} else {
-		new = append(new, generator.S("new/auth_postgres/internal/adapters/store/auth_store.go.tmpl", "internal/adapters/store/auth_store.go"))
+		new = append(new, generator.S("new/auth_postgres/internal/adapters/db/auth_store.go.tmpl", "internal/adapters/db/auth_store.go"))
 	}
 
 	if cfg.IsSSR() {
@@ -150,7 +150,7 @@ func authFileSpecs(cfg *config.ProjectConfig) (infra, new []generator.FileSpec) 
 }
 
 func createAuthMigration(db string) error {
-	migrationsDir := filepath.Join("internal", "adapters", "store", "migrations")
+	migrationsDir := filepath.Join("internal", "adapters", "db", "migrations")
 	next, err := nextMigrationNumber(migrationsDir)
 	if err != nil {
 		return err

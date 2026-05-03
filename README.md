@@ -8,6 +8,8 @@ Rails-style Go project generator. Generates production-ready hexagonal architect
 go install github.com/esrid/gogen@latest
 ```
 
+Requires Go 1.26+.
+
 ## Commands
 
 | Command | Alias | Description |
@@ -55,54 +57,54 @@ gogen new myapi -m github.com/you/myapi -d postgres -r api --no-auth
 
 ```
 myapp/
-├── main.go
-├── go.mod                               # go 1.27
+├── main.go                              # bootstrap.Run()
+├── go.mod                               # go 1.26
 ├── .env
 ├── .air.toml
 ├── Makefile
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .gogen.yaml                          # project metadata for generate commands
+├── bootstrap/
+│   ├── app.go                           # Run() — DB init + server start
+│   ├── config.go                        # env-based config
+│   ├── server.go                        # graceful shutdown
+│   ├── router.go                        # chi router + middleware (auto-updated)
+│   └── wire_gen.go                      # Handlers struct + WireHandlers (auto-updated)
 ├── internal/
-│   ├── server/
-│   │   ├── config.go                    # env-based config
-│   │   ├── server.go                    # graceful shutdown
-│   │   ├── routes.go                    # chi router + middleware
-│   │   └── wire_gen.go                  # Handler struct + WireHandlers (auto-updated)
-│   ├── adapters/
-│   │   ├── http/
-│   │   │   ├── middleware.go            # SecurityHeaders, LimitRequestBody, NoCache
-│   │   │   ├── middleware_auth.go       # RequireAuth (with --auth)
-│   │   │   └── auth_handler.go         # login/signup/reset (with --auth)
-│   │   ├── store/
-│   │   │   ├── store.go                 # DB connection + pool
-│   │   │   ├── migrations.go            # goose embed runner
-│   │   │   ├── auth_store.go           # user/session queries (with --auth)
-│   │   │   └── migrations/
-│   │   │       └── 00001_init.sql
-│   │   └── external/email/
-│   │       └── noop.go                  # email provider stub (with --auth)
-│   └── core/
-│       ├── domains/
-│       │   ├── errors.go
-│       │   └── user.go                  # User struct, context helpers (with --auth)
-│       ├── ports/
-│       │   ├── session_port.go
-│       │   ├── auth_port.go            # (with --auth)
-│       │   └── email_port.go           # (with --auth)
-│       ├── services/
-│       │   ├── auth_service.go         # (with --auth)
-│       │   └── session_service.go      # (with --auth)
-│       └── utils/
-│           ├── http_utils.go            # WriteJSON, DecodeJSON, cookies
-│           └── validation.go            # password hashing (with --auth)
+│   ├── domain/
+│   │   ├── errors.go                    # ErrNotFound, ErrUnauthorized, etc.
+│   │   ├── session_port.go              # SessionStore, SessionService interfaces
+│   │   ├── user.go                      # User struct, context helpers (with --auth)
+│   │   ├── auth_port.go                 # UserStore, UserService interfaces (with --auth)
+│   │   └── email_port.go               # EmailProvider interface (with --auth)
+│   ├── application/
+│   │   ├── auth_service.go             # login/signup/reset logic (with --auth)
+│   │   └── session_service.go          # in-memory session cache (with --auth)
+│   ├── utils/
+│   │   ├── http_utils.go               # WriteJSON, DecodeJSON, cookies
+│   │   └── validation.go               # password hashing (with --auth)
+│   └── adapters/
+│       ├── api/
+│       │   ├── middleware.go            # SecurityHeaders, LimitRequestBody, NoCache
+│       │   ├── middleware_auth.go       # RequireAuth (with --auth)
+│       │   ├── auth_handler.go         # login/signup/reset routes (with --auth)
+│       │   └── response.go             # writeOK, writeCreated, etc. (api/both mode)
+│       ├── db/
+│       │   ├── store.go                 # DB connection + pool
+│       │   ├── migrations.go            # goose embed runner
+│       │   ├── auth_store.go           # user/session queries (with --auth)
+│       │   └── migrations/
+│       │       └── 00001_init.sql
+│       └── external/email/
+│           └── noop.go                  # email provider stub (with --auth)
 └── web/                                 # SSR only
     ├── renderer.go                      # html/template + go:embed
     ├── static.go
     ├── static/robots.txt
     └── templates/
-        ├── layout.html                  # {{define "layout"}} with slots
-        ├── components/components.html   # {{define "flash"}} etc.
+        ├── layout.html
+        ├── components/components.html
         └── pages/
             ├── landing.html
             ├── error.html
@@ -126,21 +128,20 @@ myapp/
 
 **Docker**
 
-The generated `Dockerfile` builds Go 1.27 from the [esrid/go](https://github.com/esrid/go) fork at image build time:
+Standard 2-stage build using `golang:1.26-alpine`:
 
 ```
-Stage 1 — go-builder   clone + compile esrid/go fork (bootstrap: golang:1.26)
-Stage 2 — builder      compile the app with the fork toolchain (CGO_ENABLED=0)
-Stage 3 — runtime      debian:bookworm-slim + ca-certificates + tzdata
+Stage 1 — builder    go build (CGO_ENABLED=0)
+Stage 2 — runtime    alpine:3.21 + ca-certificates + tzdata
 ```
 
-The Go build is cached as a Docker layer — it only re-runs if the fork changes. Both SQLite (`modernc.org/sqlite`) and Postgres (`pgx/v5`) are pure Go, so no CGO is needed.
+Both SQLite (`modernc.org/sqlite`) and Postgres (`pgx/v5`) are pure Go — no CGO needed.
 
 ---
 
 ## gogen generate migration
 
-Create a numbered migration file in `internal/adapters/store/migrations/`.
+Create a numbered migration file in `internal/adapters/db/migrations/`.
 
 ```sh
 gogen g migration <name>
@@ -152,7 +153,7 @@ Must be run from inside a gogen project (reads `.gogen.yaml` for DB dialect).
 
 ```sh
 gogen g migration add_avatar_to_users
-# creates: internal/adapters/store/migrations/00002_add_avatar_to_users.sql
+# creates: internal/adapters/db/migrations/00002_add_avatar_to_users.sql
 ```
 
 ---
@@ -169,9 +170,9 @@ Must be run from inside a gogen project with `auth: false` in `.gogen.yaml`.
 
 **What it does**
 
-- Creates all auth files (domains, ports, services, handler, store, email stub)
-- Regenerates `main.go`, `routes.go`, and `wire_gen.go` to wire auth in
-- Re-wires all existing scaffolds in `wire_gen.go` and `routes.go`
+- Creates all auth files (domain, application, utils, handler, store, email stub)
+- Regenerates `main.go`, `bootstrap/router.go`, and `bootstrap/wire_gen.go` to wire auth in
+- Re-wires all existing scaffolds in `wire_gen.go` and `router.go`
 - Creates a new migration (`NNNNN_add_auth.sql`) with the auth tables
 - Adds SSR auth pages if the project uses SSR
 - Updates `.gogen.yaml` to `auth: true`
@@ -207,7 +208,7 @@ Generate a full CRUD resource: migration, domain, port, store, service, and HTTP
 gogen g scaffold <ModelName> [field:type ...] [--protected]
 ```
 
-Must be run from inside a gogen project (reads `.gogen.yaml`). Auto-updates `routes.go` and `wire_gen.go`.
+Must be run from inside a gogen project (reads `.gogen.yaml`). Auto-updates `bootstrap/router.go` and `bootstrap/wire_gen.go`.
 
 **Field types**
 
@@ -234,12 +235,12 @@ gogen g scaffold Post title:string body:text user:references published:bool
 **Generated files**
 
 ```
-internal/core/domains/post.go
-internal/core/ports/post_port.go
-internal/adapters/store/post_store.go
-internal/core/services/post_service.go
-internal/adapters/http/post_handler.go
-internal/adapters/store/migrations/NNNNN_create_posts.sql
+internal/domain/post.go
+internal/domain/post_port.go
+internal/application/post_service.go
+internal/adapters/db/post_store.go
+internal/adapters/api/post_handler.go
+internal/adapters/db/migrations/NNNNN_create_posts.sql
 ```
 
 With `--render ssr` or `--render both`, four HTML pages are also created:
@@ -251,6 +252,13 @@ web/templates/pages/posts_new.html
 web/templates/pages/posts_edit.html
 ```
 
+With `--render both`, an additional API handler is generated:
+
+```
+internal/adapters/web/post_handler.go   # SSR handler (GET /posts → HTML)
+internal/adapters/api/post_api_handler.go  # API handler (GET /api/posts → JSON)
+```
+
 **HTTP endpoints**
 
 | Method | Path | Handler |
@@ -260,15 +268,6 @@ web/templates/pages/posts_edit.html
 | `GET` | `/posts/{id}` | get one |
 | `PUT` / `POST` | `/posts/{id}` | update (PUT for API, POST for SSR forms) |
 | `DELETE` / `POST` | `/posts/{id}/delete` | delete (DELETE for API, POST for SSR forms) |
-
-**`--render both` mode**
-
-When the project uses `--render both`, every scaffold generates two handler files sharing one service:
-
-| File | Type | Mount |
-|------|------|-------|
-| `post_handler.go` | `PostHandler` | `/posts` (SSR pages) |
-| `post_api_handler.go` | `PostAPIHandler` | `/api/posts` (JSON) |
 
 **Association queries**
 
@@ -308,23 +307,23 @@ Three things happen automatically:
 
 **Auto-wiring**
 
-After generation, `wire_gen.go` and `routes.go` are updated automatically — no manual edits needed:
+After generation, `bootstrap/wire_gen.go` and `bootstrap/router.go` are updated automatically — no manual edits needed:
 
 ```go
-// internal/server/wire_gen.go (auto-generated)
-type Handler struct {
-    Store *store.Store
+// bootstrap/wire_gen.go (auto-generated)
+type Handlers struct {
+    Store *db.Store
     Post  *api.PostHandler
 }
 
-func WireHandlers(dbStore *store.Store, logger *slog.Logger) *Handler {
-    h := &Handler{Store: dbStore}
-    postSvc := services.NewPostService(dbStore)
+func WireHandlers(dbStore *db.Store, logger *slog.Logger) *Handlers {
+    h := &Handlers{Store: dbStore}
+    postSvc := application.NewPostService(dbStore)
     h.Post = api.NewPostHandler(postSvc)
     return h
 }
 
-// internal/server/routes.go (mount injected automatically)
+// bootstrap/router.go (mount injected automatically)
 if h.Post != nil {
     r.Mount("/posts", h.Post.Route())
 }
@@ -360,7 +359,7 @@ Accepts the same field types as `gogen g scaffold`. Duplicate fields are rejecte
 
 ## gogen destroy scaffold
 
-Remove all files generated by `gogen g scaffold`. Updates `wire_gen.go` and `routes.go` automatically.
+Remove all files generated by `gogen g scaffold`. Updates `bootstrap/wire_gen.go` and `bootstrap/router.go` automatically.
 
 ```sh
 gogen d scaffold <ModelName>
@@ -375,14 +374,15 @@ gogen d scaffold Post
 Removes:
 
 ```
-internal/core/domains/post.go
-internal/core/ports/post_port.go
-internal/adapters/store/post_store.go
-internal/core/services/post_service.go
-internal/adapters/http/post_handler.go
-internal/adapters/http/post_api_handler.go  # both mode only
+internal/domain/post.go
+internal/domain/post_port.go
+internal/application/post_service.go
+internal/adapters/db/post_store.go
+internal/adapters/api/post_handler.go
+internal/adapters/api/post_api_handler.go   # both mode only
+internal/adapters/web/post_handler.go       # ssr/both mode only
 web/templates/pages/posts_*.html            # SSR only
-internal/adapters/store/migrations/*_create_posts.sql
+internal/adapters/db/migrations/*_create_posts.sql
 ```
 
 **Migration warning**
@@ -396,7 +396,7 @@ warning migration 00003_create_posts.sql was deleted — run goose down manually
 If you already ran `goose up` against a real database, run the down migration first:
 
 ```sh
-goose -dir internal/adapters/store/migrations sqlite3 myapp.db down
+goose -dir internal/adapters/db/migrations sqlite3 myapp.db down
 gogen d scaffold Post
 ```
 

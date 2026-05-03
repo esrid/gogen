@@ -80,26 +80,28 @@ func runGenerateAttribute(_ *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
-		fmt.Printf("  dryrun  internal/adapters/store/migrations/NNNNN_add_cols_to_%s.sql\n", data.TableName)
+		fmt.Printf("  dryrun  internal/adapters/db/migrations/NNNNN_add_cols_to_%s.sql\n", data.TableName)
 	}
 
-	// Regenerate domain, store, handler(s) (force overwrite)
+	// Regenerate domain, port, service, store, handler(s) (force overwrite)
 	n := strings.ToLower(modelName)
 	regenSpecs := []scaffoldSpec{
-		{"scaffold/domain.go.tmpl", "internal/core/domains/" + n + ".go"},
-		{attributeStoreTemplate(gogenCfg.DB), "internal/adapters/store/" + n + "_store.go"},
+		{"scaffold/domain.go.tmpl", "internal/domain/" + n + ".go"},
+		{"scaffold/port.go.tmpl", "internal/domain/" + n + "_port.go"},
+		{"scaffold/service.go.tmpl", "internal/application/" + n + "_service.go"},
+		{attributeStoreTemplate(gogenCfg.DB), "internal/adapters/db/" + n + "_store.go"},
 	}
 
 	switch {
 	case cfg.IsBoth():
 		regenSpecs = append(regenSpecs,
-			scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/http/" + n + "_handler.go"},
-			scaffoldSpec{"scaffold/handler_api.go.tmpl", "internal/adapters/http/" + n + "_api_handler.go"},
+			scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/web/" + n + "_handler.go"},
+			scaffoldSpec{"scaffold/handler.go.tmpl", "internal/adapters/api/" + n + "_api_handler.go"},
 		)
 	case cfg.IsSSR():
-		regenSpecs = append(regenSpecs, scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/http/" + n + "_handler.go"})
+		regenSpecs = append(regenSpecs, scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/web/" + n + "_handler.go"})
 	default:
-		regenSpecs = append(regenSpecs, scaffoldSpec{"scaffold/handler.go.tmpl", "internal/adapters/http/" + n + "_handler.go"})
+		regenSpecs = append(regenSpecs, scaffoldSpec{"scaffold/handler.go.tmpl", "internal/adapters/api/" + n + "_handler.go"})
 	}
 
 	if cfg.IsSSR() {
@@ -159,7 +161,7 @@ func regenFile(tmplPath, outPath string, data *scaffold.Data) error {
 }
 
 func createAttributeMigration(data *scaffold.Data, newFields []scaffold.Field, db string) error {
-	migrationsDir := filepath.Join("internal", "adapters", "store", "migrations")
+	migrationsDir := filepath.Join("internal", "adapters", "db", "migrations")
 	next, err := nextMigrationNumber(migrationsDir)
 	if err != nil {
 		return err

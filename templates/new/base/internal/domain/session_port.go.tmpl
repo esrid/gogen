@@ -1,0 +1,15 @@
+package domain
+
+import (
+	"context"
+	"time"
+)
+
+type SessionStore interface {
+	GetUserFromToken(ctx context.Context, token string) (string, *time.Time, error)
+}
+
+type SessionService interface {
+	Create(ctx context.Context, token, userID string) (string, error)
+	Validate(ctx context.Context, token string) (string, error)
+}

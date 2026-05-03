@@ -1,5 +1,5 @@
 APP=[[.ProjectName]]
-MIGRATIONS_DIR=./internal/adapters/store/migrations
+MIGRATIONS_DIR=./internal/adapters/db/migrations
 [[- if .IsSQLite]]
 DB_URL?=$(DATABASE_URL)
 GOOSE=goose -dir $(MIGRATIONS_DIR) sqlite3 "$(DB_URL)"

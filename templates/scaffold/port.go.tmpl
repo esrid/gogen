@@ -1,29 +1,25 @@
-package ports
+package domain
 
-import (
-	"context"
-
-	"[[.ModulePath]]/internal/core/domains"
-)
+import "context"
 
 type [[.ModelName]]Store interface {
-	Create[[.ModelName]](ctx context.Context, m domains.[[.ModelName]]) (domains.[[.ModelName]], error)
-	Get[[.ModelName]](ctx context.Context, id string) (*domains.[[.ModelName]], error)
-	List[[.ModelName]]s(ctx context.Context) ([]domains.[[.ModelName]], error)
+	Create[[.ModelName]](ctx context.Context, m [[.ModelName]]) ([[.ModelName]], error)
+	Get[[.ModelName]](ctx context.Context, id string) (*[[.ModelName]], error)
+	List[[.ModelName]]s(ctx context.Context) ([][[.ModelName]], error)
 [[- range .Refs]]
-	[[.StoreMethod]](ctx context.Context, [[.ParamName]] string) ([]domains.[[$.ModelName]], error)
+	[[.StoreMethod]](ctx context.Context, [[.ParamName]] string) ([][[$.ModelName]], error)
 [[- end]]
-	Update[[.ModelName]](ctx context.Context, m domains.[[.ModelName]]) error
+	Update[[.ModelName]](ctx context.Context, m [[.ModelName]]) error
 	Delete[[.ModelName]](ctx context.Context, id string) error
 }
 
 type [[.ModelName]]Service interface {
-	Create(ctx context.Context, m domains.[[.ModelName]]) (*domains.[[.ModelName]], error)
-	Get(ctx context.Context, id string) (*domains.[[.ModelName]], error)
-	List(ctx context.Context) ([]domains.[[.ModelName]], error)
+	Create(ctx context.Context, m [[.ModelName]]) (*[[.ModelName]], error)
+	Get(ctx context.Context, id string) (*[[.ModelName]], error)
+	List(ctx context.Context) ([][[.ModelName]], error)
 [[- range .Refs]]
-	[[.ServiceMethod]](ctx context.Context, [[.ParamName]] string) ([]domains.[[$.ModelName]], error)
+	[[.ServiceMethod]](ctx context.Context, [[.ParamName]] string) ([][[$.ModelName]], error)
 [[- end]]
-	Update(ctx context.Context, m domains.[[.ModelName]]) error
+	Update(ctx context.Context, m [[.ModelName]]) error
 	Delete(ctx context.Context, id string) error
 }

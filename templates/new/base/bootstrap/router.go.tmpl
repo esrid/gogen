@@ -1,0 +1,85 @@
+package bootstrap
+
+import (
+	"net/http"
+	"time"
+
+	"[[.ModulePath]]/internal/adapters/api"
+[[- if .IsSSR]]
+	"[[.ModulePath]]/web"
+[[- end]]
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
+)
+
+func NewRouter(h *Handlers, staticHandler http.Handler) http.Handler {
+	r := chi.NewRouter()
+
+	r.Use(httprate.LimitByIP(100, 1*time.Minute))
+	r.Use(api.SecurityHeaders)
+	r.Use(api.LimitRequestBody)
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.Compress(5))
+
+	csrf := http.NewCrossOriginProtection()
+	r.Use(func(next http.Handler) http.Handler {
+		return csrf.Handler(next)
+	})
+
+	if staticHandler != nil {
+		r.Get("/static/*", func(w http.ResponseWriter, r *http.Request) {
+			http.StripPrefix("/static/", staticHandler).ServeHTTP(w, r)
+		})
+	}
+
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+[[- if .Auth]]
+		if h != nil && h.SessionService != nil {
+			if cookie, err := r.Cookie("session_token"); err == nil {
+				if _, err := h.SessionService.Validate(r.Context(), cookie.Value); err == nil {
+					http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+					return
+				}
+			}
+		}
+[[- end]]
+[[- if .IsSSR]]
+		web.Render(w, "landing.html", map[string]any{"Title": "[[.ProjectName]]"})
+[[- else]]
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
+[[- end]]
+	})
+
+	// Public routes
+	for _, c := range h.PublicControllers {
+		c.Register(r)
+	}
+
+[[- if .Auth]]
+	// Protected routes
+	r.Group(func(r chi.Router) {
+		r.Use(api.RequireAuth(h.SessionService))
+		r.Use(api.NoCache)
+		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+[[- if .IsSSR]]
+			web.Render(w, "dashboard.html", map[string]any{"Title": "Dashboard"})
+[[- else]]
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"status":"authenticated"}`))
+[[- end]]
+		})
+
+		for _, c := range h.ProtectedControllers {
+			c.Register(r)
+		}
+	})
+[[- end]]
+
+	return r
+}

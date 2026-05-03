@@ -105,45 +105,47 @@ func fileSpecs(cfg *config.ProjectConfig) []FileSpec {
 		s("new/base/docker-compose.yml.tmpl", "docker-compose.yml"),
 		s("new/base/dot_dockerignore.tmpl", ".dockerignore"),
 		s("new/base/dot_gogen.yaml.tmpl", ".gogen.yaml"),
-		s("new/base/internal/server/config.go.tmpl", "internal/server/config.go"),
-		s("new/base/internal/server/server.go.tmpl", "internal/server/server.go"),
-		s("new/base/internal/server/routes.go.tmpl", "internal/server/routes.go"),
-		s("new/base/internal/server/wire_gen.go.tmpl", "internal/server/wire_gen.go"),
-		s("new/base/internal/adapters/http/middleware.go.tmpl", "internal/adapters/http/middleware.go"),
-		s("new/base/internal/core/domains/errors.go.tmpl", "internal/core/domains/errors.go"),
-		s("new/base/internal/core/ports/session_port.go.tmpl", "internal/core/ports/session_port.go"),
-		s("new/base/internal/core/utils/http_utils.go.tmpl", "internal/core/utils/http_utils.go"),
-		// DB store
-		s("new/db/"+cfg.DB+"/internal/adapters/store/store.go.tmpl", "internal/adapters/store/store.go"),
-		s("new/db/"+cfg.DB+"/internal/adapters/store/migrations.go.tmpl", "internal/adapters/store/migrations.go"),
+		s("new/base/bootstrap/app.go.tmpl", "bootstrap/app.go"),
+		s("new/base/bootstrap/config.go.tmpl", "bootstrap/config.go"),
+		s("new/base/bootstrap/server.go.tmpl", "bootstrap/server.go"),
+		s("new/base/bootstrap/router.go.tmpl", "bootstrap/router.go"),
+		s("new/base/bootstrap/wire_gen.go.tmpl", "bootstrap/wire_gen.go"),
+		s("new/base/internal/adapters/api/controller.go.tmpl", "internal/adapters/api/controller.go"),
+		s("new/base/internal/adapters/api/middleware.go.tmpl", "internal/adapters/api/middleware.go"),
+		s("new/base/internal/domain/errors.go.tmpl", "internal/domain/errors.go"),
+		s("new/base/internal/domain/session_port.go.tmpl", "internal/domain/session_port.go"),
+		s("new/base/internal/utils/http_utils.go.tmpl", "internal/utils/http_utils.go"),
+		// DB adapter
+		s("new/db/"+cfg.DB+"/internal/adapters/db/store.go.tmpl", "internal/adapters/db/store.go"),
+		s("new/db/"+cfg.DB+"/internal/adapters/db/migrations.go.tmpl", "internal/adapters/db/migrations.go"),
 	}
 
 	if cfg.Auth {
 		specs = append(specs,
-			s("new/auth/internal/core/domains/user.go.tmpl", "internal/core/domains/user.go"),
-			s("new/auth/internal/core/ports/auth_port.go.tmpl", "internal/core/ports/auth_port.go"),
-			s("new/auth/internal/core/ports/email_port.go.tmpl", "internal/core/ports/email_port.go"),
-			s("new/auth/internal/core/services/auth_service.go.tmpl", "internal/core/services/auth_service.go"),
-			s("new/auth/internal/core/services/session_service.go.tmpl", "internal/core/services/session_service.go"),
-			s("new/auth/internal/core/utils/validation.go.tmpl", "internal/core/utils/validation.go"),
-			s("new/auth/internal/adapters/http/auth_handler.go.tmpl", "internal/adapters/http/auth_handler.go"),
-			s("new/auth/internal/adapters/http/middleware_auth.go.tmpl", "internal/adapters/http/middleware_auth.go"),
+			s("new/auth/internal/domain/user.go.tmpl", "internal/domain/user.go"),
+			s("new/auth/internal/domain/auth_port.go.tmpl", "internal/domain/auth_port.go"),
+			s("new/auth/internal/domain/email_port.go.tmpl", "internal/domain/email_port.go"),
+			s("new/auth/internal/application/auth_service.go.tmpl", "internal/application/auth_service.go"),
+			s("new/auth/internal/application/session_service.go.tmpl", "internal/application/session_service.go"),
+			s("new/auth/internal/utils/validation.go.tmpl", "internal/utils/validation.go"),
+			s("new/auth/internal/adapters/api/auth_handler.go.tmpl", "internal/adapters/api/auth_handler.go"),
+			s("new/auth/internal/adapters/api/middleware_auth.go.tmpl", "internal/adapters/api/middleware_auth.go"),
 			s("new/auth/internal/adapters/external/email/noop.go.tmpl", "internal/adapters/external/email/noop.go"),
 		)
 		if cfg.IsSQLite() {
 			specs = append(specs,
-				s("new/auth_sqlite/internal/adapters/store/auth_store.go.tmpl", "internal/adapters/store/auth_store.go"),
-				s("new/auth_sqlite/internal/adapters/store/migrations/00001_init.sql", "internal/adapters/store/migrations/00001_init.sql"),
+				s("new/auth_sqlite/internal/adapters/db/auth_store.go.tmpl", "internal/adapters/db/auth_store.go"),
+				s("new/auth_sqlite/internal/adapters/store/migrations/00001_init.sql", "internal/adapters/db/migrations/00001_init.sql"),
 			)
 		} else {
 			specs = append(specs,
-				s("new/auth_postgres/internal/adapters/store/auth_store.go.tmpl", "internal/adapters/store/auth_store.go"),
-				s("new/auth_postgres/internal/adapters/store/migrations/00001_init.sql", "internal/adapters/store/migrations/00001_init.sql"),
+				s("new/auth_postgres/internal/adapters/db/auth_store.go.tmpl", "internal/adapters/db/auth_store.go"),
+				s("new/auth_postgres/internal/adapters/store/migrations/00001_init.sql", "internal/adapters/db/migrations/00001_init.sql"),
 			)
 		}
 	} else {
 		specs = append(specs,
-			s("new/base/internal/adapters/store/migrations/00001_init.sql", "internal/adapters/store/migrations/00001_init.sql"),
+			s("new/base/internal/adapters/store/migrations/00001_init.sql", "internal/adapters/db/migrations/00001_init.sql"),
 		)
 	}
 
@@ -152,25 +154,25 @@ func fileSpecs(cfg *config.ProjectConfig) []FileSpec {
 			s("new/ssr/web/renderer.go.tmpl", "web/renderer.go"),
 			s("new/ssr/web/static.go.tmpl", "web/static.go"),
 			s("new/ssr/web/static/robots.txt", "web/static/robots.txt"),
-			s("new/ssr/web/templates/layout.html", "web/templates/layout.html"),
-			s("new/ssr/web/templates/components/components.html", "web/templates/components/components.html"),
-			s("new/ssr/web/templates/pages/landing.html", "web/templates/pages/landing.html"),
-			s("new/ssr/web/templates/pages/error.html", "web/templates/pages/error.html"),
+			s("new/ssr/web/layouts/layout.templ.tmpl", "web/layouts/layout.templ"),
+			s("new/ssr/web/components/components.templ.tmpl", "web/components/components.templ"),
+			s("new/ssr/web/components/landing.templ.tmpl", "web/components/landing.templ"),
+			s("new/ssr/web/components/error.templ.tmpl", "web/components/error.templ"),
 		)
 		if cfg.Auth {
 			specs = append(specs,
-				s("new/ssr_auth/web/templates/pages/login.html", "web/templates/pages/login.html"),
-				s("new/ssr_auth/web/templates/pages/signup.html", "web/templates/pages/signup.html"),
-				s("new/ssr_auth/web/templates/pages/forgot-password.html", "web/templates/pages/forgot-password.html"),
-				s("new/ssr_auth/web/templates/pages/reset-password.html", "web/templates/pages/reset-password.html"),
-				s("new/ssr_auth/web/templates/pages/settings.html", "web/templates/pages/settings.html"),
+				s("new/ssr_auth/web/components/auth/login.templ.tmpl", "web/components/auth/login.templ"),
+				s("new/ssr_auth/web/components/auth/signup.templ.tmpl", "web/components/auth/signup.templ"),
+				s("new/ssr_auth/web/components/auth/forgot-password.templ.tmpl", "web/components/auth/forgot-password.templ"),
+				s("new/ssr_auth/web/components/auth/reset-password.templ.tmpl", "web/components/auth/reset-password.templ"),
+				s("new/ssr_auth/web/components/auth/settings.templ.tmpl", "web/components/auth/settings.templ"),
 			)
 		}
 	}
 
 	if cfg.IsAPI() {
 		specs = append(specs,
-			s("new/api/internal/adapters/http/response.go.tmpl", "internal/adapters/http/response.go"),
+			s("new/api/internal/adapters/api/response.go.tmpl", "internal/adapters/api/response.go"),
 		)
 	}
 

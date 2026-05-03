@@ -1,0 +1,17 @@
+package components
+
+import "[[.ModulePath]]/web/layouts"
+
+templ Landing() {
+	@layouts.Layout("Welcome") {
+		<div class="hero min-h-[70vh] bg-base-200">
+			<div class="hero-content text-center">
+				<div class="max-w-md">
+					<h1 class="text-5xl font-bold">Hello there</h1>
+					<p class="py-6">Welcome to your new Gogen application powered by templ.</p>
+					<a href="/auth/signup" class="btn btn-primary">Get Started</a>
+				</div>
+			</div>
+		</div>
+	}
+}

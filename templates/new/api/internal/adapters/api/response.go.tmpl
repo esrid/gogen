@@ -1,0 +1,41 @@
+package api
+
+import (
+	"net/http"
+
+	"[[.ModulePath]]/internal/utils"
+)
+
+func writeOK(w http.ResponseWriter, data any) {
+	w.WriteHeader(http.StatusOK)
+	utils.WriteJSON(w, data)
+}
+
+func writeCreated(w http.ResponseWriter, data any) {
+	w.WriteHeader(http.StatusCreated)
+	utils.WriteJSON(w, data)
+}
+
+func writeNoContent(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeBadRequest(w http.ResponseWriter, msg string) {
+	w.WriteHeader(http.StatusBadRequest)
+	utils.WriteJSON(w, map[string]string{"error": msg})
+}
+
+func writeUnauthorized(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusUnauthorized)
+	utils.WriteJSON(w, map[string]string{"error": "unauthorized"})
+}
+
+func writeNotFound(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNotFound)
+	utils.WriteJSON(w, map[string]string{"error": "not found"})
+}
+
+func writeInternalError(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusInternalServerError)
+	utils.WriteJSON(w, map[string]string{"error": "internal server error"})
+}

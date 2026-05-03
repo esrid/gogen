@@ -1,0 +1,62 @@
+package bootstrap
+
+import (
+	"context"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"time"
+
+	"[[.ModulePath]]/internal/adapters/db"
+[[- if .IsSSR]]
+	"[[.ModulePath]]/web"
+[[- end]]
+)
+
+func Run() {
+	cfg := Load()
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+[[- if .IsSQLite]]
+	dbStore, err := db.NewStore(ctx)
+[[- else]]
+	dbStore, err := db.NewStore(ctx, cfg.DatabaseURL)
+[[- end]]
+	if err != nil {
+		logger.Error("unable to connect to database", slog.String("error", err.Error()))
+		return
+	}
+[[- if .IsSQLite]]
+
+	if err := dbStore.RunMigrations(ctx, logger); err != nil {
+		logger.Error("unable to run migrations", slog.String("error", err.Error()))
+		return
+	}
+[[- end]]
+
+	handlers := WireHandlers(dbStore, logger)
+[[- if .IsSSR]]
+
+	staticHandler := web.GetStaticHandler()
+[[- end]]
+
+	router := NewRouter(handlers, [[if .IsSSR]]staticHandler[[else]]nil[[end]])
+
+	s := &http.Server{
+		Addr:              cfg.ServerPort,
+		Handler:           router,
+		ReadTimeout:       5 * time.Second,
+		ReadHeaderTimeout: 2 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
+		BaseContext: func(l net.Listener) context.Context {
+			return ctx
+		},
+	}
+
+	RunServer(ctx, logger, s)
+}

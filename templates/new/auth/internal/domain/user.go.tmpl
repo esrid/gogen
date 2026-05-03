@@ -1,0 +1,28 @@
+package domain
+
+import "context"
+
+type User struct {
+	ID           string
+	Email        string
+	PasswordHash *string
+	FullName     string
+	AvatarURL    string
+	Timezone     string
+}
+
+type NewUser struct {
+	Email    string
+	Password string
+	Repeat   string
+	Timezone string
+}
+
+type contextKey string
+
+const UserContextKey contextKey = "user"
+
+func GetContextUser(ctx context.Context) string {
+	id, _ := ctx.Value(UserContextKey).(string)
+	return id
+}

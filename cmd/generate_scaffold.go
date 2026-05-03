@@ -73,7 +73,7 @@ func runScaffold(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
-		fmt.Printf("  dryrun  internal/adapters/store/migrations/NNNNN_create_%s.sql\n", data.TableName)
+		fmt.Printf("  dryrun  internal/adapters/db/migrations/NNNNN_create_%s.sql\n", data.TableName)
 	}
 
 	if !flagDryRun {
@@ -116,31 +116,30 @@ func scaffoldSpecs(data *scaffold.Data) []scaffoldSpec {
 	}
 
 	specs := []scaffoldSpec{
-		{"scaffold/domain.go.tmpl", "internal/core/domains/" + n + ".go"},
-		{"scaffold/port.go.tmpl", "internal/core/ports/" + n + "_port.go"},
-		{storeTemplate, "internal/adapters/store/" + n + "_store.go"},
-		{"scaffold/service.go.tmpl", "internal/core/services/" + n + "_service.go"},
+		{"scaffold/domain.go.tmpl", "internal/domain/" + n + ".go"},
+		{"scaffold/port.go.tmpl", "internal/domain/" + n + "_port.go"},
+		{storeTemplate, "internal/adapters/db/" + n + "_store.go"},
+		{"scaffold/service.go.tmpl", "internal/application/" + n + "_service.go"},
 	}
 
 	switch {
 	case data.IsBoth():
 		specs = append(specs,
-			scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/http/" + n + "_handler.go"},
-			scaffoldSpec{"scaffold/handler_api.go.tmpl", "internal/adapters/http/" + n + "_api_handler.go"},
+			scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/web/" + n + "_handler.go"},
+			scaffoldSpec{"scaffold/handler.go.tmpl", "internal/adapters/api/" + n + "_api_handler.go"},
 		)
 	case data.IsSSR():
-		specs = append(specs, scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/http/" + n + "_handler.go"})
+		specs = append(specs, scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/web/" + n + "_handler.go"})
 	default:
-		specs = append(specs, scaffoldSpec{"scaffold/handler.go.tmpl", "internal/adapters/http/" + n + "_handler.go"})
+		specs = append(specs, scaffoldSpec{"scaffold/handler.go.tmpl", "internal/adapters/api/" + n + "_handler.go"})
 	}
 
 	if data.IsSSR() {
-		t := data.TableName
 		specs = append(specs,
-			scaffoldSpec{"scaffold/pages/index.html.tmpl", "web/templates/pages/" + t + "_index.html"},
-			scaffoldSpec{"scaffold/pages/show.html.tmpl", "web/templates/pages/" + t + "_show.html"},
-			scaffoldSpec{"scaffold/pages/new.html.tmpl", "web/templates/pages/" + t + "_new.html"},
-			scaffoldSpec{"scaffold/pages/edit.html.tmpl", "web/templates/pages/" + t + "_edit.html"},
+			scaffoldSpec{"scaffold/pages/index.templ.tmpl", "web/templates/components/" + n + "/index.templ"},
+			scaffoldSpec{"scaffold/pages/show.templ.tmpl", "web/templates/components/" + n + "/show.templ"},
+			scaffoldSpec{"scaffold/pages/new.templ.tmpl", "web/templates/components/" + n + "/new.templ"},
+			scaffoldSpec{"scaffold/pages/edit.templ.tmpl", "web/templates/components/" + n + "/edit.templ"},
 		)
 	}
 
@@ -180,7 +179,7 @@ func writeScaffoldFile(tmplPath, outPath string, data *scaffold.Data) error {
 }
 
 func createScaffoldMigration(data *scaffold.Data) error {
-	migrationsDir := filepath.Join("internal", "adapters", "store", "migrations")
+	migrationsDir := filepath.Join("internal", "adapters", "db", "migrations")
 	next, err := nextMigrationNumber(migrationsDir)
 	if err != nil {
 		return err
