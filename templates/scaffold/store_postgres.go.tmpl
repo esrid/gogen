@@ -9,12 +9,12 @@ import (
 	"[[.ModulePath]]/internal/core/domains"
 )
 
-func (s *Store) Create[[.ModelName]](ctx context.Context, p domains.[[.ModelName]]) (string, error) {
+func (s *Store) Create[[.ModelName]](ctx context.Context, p domains.[[.ModelName]]) (domains.[[.ModelName]], error) {
 	rows, _ := s.Pool.Query(ctx,
-		`INSERT INTO [[.TableName]] ([[.InsertCols]]) VALUES ([[.PGInsert]]) RETURNING id`,
+		`INSERT INTO [[.TableName]] ([[.InsertCols]]) VALUES ([[.PGInsert]]) RETURNING [[.SelectCols]]`,
 		[[.InsertArgs]],
 	)
-	return pgx.CollectOneRow(rows, pgx.RowTo[string])
+	return pgx.CollectOneRow(rows, pgx.RowToStructByPos[domains.[[.ModelName]]])
 }
 
 func (s *Store) Get[[.ModelName]](ctx context.Context, id string) (*domains.[[.ModelName]], error) {

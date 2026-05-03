@@ -7,7 +7,7 @@ import (
 )
 
 type [[.ModelName]]Store interface {
-	Create[[.ModelName]](ctx context.Context, m domains.[[.ModelName]]) (string, error)
+	Create[[.ModelName]](ctx context.Context, m domains.[[.ModelName]]) (domains.[[.ModelName]], error)
 	Get[[.ModelName]](ctx context.Context, id string) (*domains.[[.ModelName]], error)
 	List[[.ModelName]]s(ctx context.Context) ([]domains.[[.ModelName]], error)
 [[- range .Refs]]

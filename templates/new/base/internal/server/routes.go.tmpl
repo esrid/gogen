@@ -5,8 +5,6 @@ import (
 	"time"
 
 	api "[[.ModulePath]]/internal/adapters/http"
-	"[[.ModulePath]]/internal/adapters/store"
-	"[[.ModulePath]]/internal/core/ports"
 [[- if .IsSSR]]
 	"[[.ModulePath]]/web"
 [[- end]]
@@ -15,15 +13,7 @@ import (
 	"github.com/go-chi/httprate"
 )
 
-type Handler struct {
-	Store *store.Store
-[[- if .Auth]]
-	Auth *api.AuthHandler
-[[- end]]
-	// gogen:inject:handlers
-}
-
-func NewRouter(h *Handler, staticHandler http.Handler, sessionService ports.SessionService) http.Handler {
+func NewRouter(h *Handler, staticHandler http.Handler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(httprate.LimitByIP(100, 1*time.Minute))
@@ -59,9 +49,9 @@ func NewRouter(h *Handler, staticHandler http.Handler, sessionService ports.Sess
 	// Root
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 [[- if .Auth]]
-		if sessionService != nil {
+		if h != nil && h.SessionService != nil {
 			if cookie, err := r.Cookie("session_token"); err == nil {
-				if _, err := sessionService.Validate(r.Context(), cookie.Value); err == nil {
+				if _, err := h.SessionService.Validate(r.Context(), cookie.Value); err == nil {
 					http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 					return
 				}
@@ -83,7 +73,7 @@ func NewRouter(h *Handler, staticHandler http.Handler, sessionService ports.Sess
 [[- if .Auth]]
 	// Protected routes
 	r.Group(func(r chi.Router) {
-		r.Use(api.RequireAuth(sessionService))
+		r.Use(api.RequireAuth(h.SessionService))
 		r.Use(api.NoCache)
 		// gogen:inject:protected-routes
 		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {

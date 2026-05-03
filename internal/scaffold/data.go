@@ -17,6 +17,8 @@ type RefAssoc struct {
 	StoreMethod   string // "ListPostsByUserID"
 	ServiceMethod string // "ListByUserID"
 	ParamName     string // "userID"
+	URLSegment    string // "post" — singular snake_case for route: /by-post/{postID}
+	IsUserRef     bool   // true when RefTable == "users" (auth-scoped, no public route)
 }
 
 type Data struct {
@@ -43,8 +45,9 @@ type Data struct {
 	UpdateArgs     string // "p.Title, p.Body, p.ID"
 	PGUpdateWhereN string // "$3"
 
-	HasTimeImport  bool
-	NeedsStrconv   bool // any int or float field (needs strconv in SSR form parsing)
+	HasTimeImport   bool
+	NeedsStrconv    bool // any int or float field (needs strconv in SSR form parsing)
+	HasNonUserRefs  bool // has at least one non-user references field
 
 	Protected     bool   // --protected flag: routes require auth
 	HasUserRef    bool   // has a user:references field
@@ -80,6 +83,7 @@ func NewData(modelName string, fields []Field, cfg *config.ProjectConfig) *Data 
 			refModel := ToCamel(singular)
 			paramName := strings.ToLower(refModel[:1]) + refModel[1:] + "ID"
 
+			isUserRef := f.RefTable == "users"
 			assoc := RefAssoc{
 				FieldGoName:   f.GoName,
 				FieldName:     f.Name,
@@ -88,13 +92,17 @@ func NewData(modelName string, fields []Field, cfg *config.ProjectConfig) *Data 
 				StoreMethod:   "List" + modelName + "sBy" + refModel + "ID",
 				ServiceMethod: "ListBy" + refModel + "ID",
 				ParamName:     paramName,
+				URLSegment:    singularize(f.RefTable),
+				IsUserRef:     isUserRef,
 			}
 			d.Refs = append(d.Refs, assoc)
 
-			if f.RefTable == "users" {
+			if isUserRef {
 				d.HasUserRef = true
 				d.UserRefGoName = f.GoName
 				d.UserRef = &assoc
+			} else {
+				d.HasNonUserRefs = true
 			}
 		}
 	}

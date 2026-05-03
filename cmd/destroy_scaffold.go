@@ -49,6 +49,7 @@ func runDestroyScaffold(_ *cobra.Command, args []string) error {
 		"internal/adapters/store/" + n + "_store.go",
 		"internal/core/services/" + n + "_service.go",
 		"internal/adapters/http/" + n + "_handler.go",
+		"internal/adapters/http/" + n + "_api_handler.go",
 		"web/templates/pages/" + t + "_index.html",
 		"web/templates/pages/" + t + "_show.html",
 		"web/templates/pages/" + t + "_new.html",
@@ -76,8 +77,8 @@ func runDestroyScaffold(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	removeWireScaffold(data)
 	removeScaffoldMeta(gogenCfg, modelName)
+	removeWireScaffold(data, gogenCfg)
 
 	fmt.Println("\nDone.")
 	return nil

@@ -33,6 +33,9 @@ func (h *[[.ModelName]]Handler) Route() http.Handler {
 	r.Get("/{id}/edit", h.editForm)
 	r.Post("/{id}", h.update)
 	r.Post("/{id}/delete", h.delete)
+[[- range .Refs]][[- if not .IsUserRef]]
+	r.Get("/by-[[.URLSegment]]/{[[.ParamName]]}", h.listBy[[.RefModel]])
+[[- end]][[- end]]
 	return r
 }
 
@@ -137,12 +140,6 @@ func (h *[[.ModelName]]Handler) editForm(w http.ResponseWriter, r *http.Request)
 
 func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-[[- if .Protected]]
-	if domains.GetContextUser(r.Context()) == "" {
-		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
-		return
-	}
-[[- end]]
 	if err := r.ParseForm(); err != nil {
 		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
 		return
@@ -178,15 +175,22 @@ func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
 
 func (h *[[.ModelName]]Handler) delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-[[- if .Protected]]
-	if domains.GetContextUser(r.Context()) == "" {
-		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
-		return
-	}
-[[- end]]
 	if err := h.service.Delete(r.Context(), id); err != nil {
 		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
 		return
 	}
 	http.Redirect(w, r, "[[.RoutePrefix]]", http.StatusSeeOther)
 }
+[[range .Refs]][[if not .IsUserRef]]
+func (h *[[$.ModelName]]Handler) listBy[[.RefModel]](w http.ResponseWriter, r *http.Request) {
+	[[.ParamName]] := chi.URLParam(r, "[[.ParamName]]")
+	items, err := h.service.[[.ServiceMethod]](r.Context(), [[.ParamName]])
+	if err != nil {
+		web.Render(w, "error.html", map[string]any{"Message": err.Error()})
+		return
+	}
+	web.Render(w, "[[$.TableName]]_index.html", map[string]any{
+		"[[$.ModelNamePlural]]": items,
+	})
+}
+[[end]][[end]]

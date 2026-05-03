@@ -1,24 +1,25 @@
-FROM golang:1.23-alpine AS builder
+# Stage 1: Build Go toolchain from esrid/go fork
+FROM golang:1.26-bookworm AS go-builder
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN git clone https://github.com/esrid/go.git /go-fork
+WORKDIR /go-fork/src
+ENV GOROOT_BOOTSTRAP=/usr/local/go
+RUN ./make.bash
 
-[[- if .IsSQLite]]
-RUN apk add --no-cache gcc musl-dev
-[[- end]]
-
+# Stage 2: Build application
+FROM debian:bookworm-slim AS builder
+COPY --from=go-builder /go-fork /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}"
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
-
 COPY . .
-[[- if .IsSQLite]]
-RUN CGO_ENABLED=1 go build -o [[.ProjectName]] .
-[[- else]]
-RUN CGO_ENABLED=0 go build -o [[.ProjectName]] .
-[[- end]]
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o [[.ProjectName]] .
 
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata
+# Stage 3: Minimal runtime
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/[[.ProjectName]] .
-
 EXPOSE 8080
 CMD ["./[[.ProjectName]]"]

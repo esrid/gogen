@@ -77,10 +77,10 @@ func runScaffold(cmd *cobra.Command, args []string) error {
 	}
 
 	if !flagDryRun {
-		autoWireScaffold(data, gogenCfg.Module)
 		if err := saveScaffoldMeta(gogenCfg, modelName, fieldArgs, protected); err != nil {
 			fmt.Printf("  warn    could not save scaffold metadata: %v\n", err)
 		}
+		autoWireScaffold(data, gogenCfg)
 	}
 
 	fmt.Println("\nDone.")
@@ -115,17 +115,23 @@ func scaffoldSpecs(data *scaffold.Data) []scaffoldSpec {
 		storeTemplate = "scaffold/store_postgres.go.tmpl"
 	}
 
-	handlerTemplate := "scaffold/handler.go.tmpl"
-	if data.IsSSR() {
-		handlerTemplate = "scaffold/handler_ssr.go.tmpl"
-	}
-
 	specs := []scaffoldSpec{
 		{"scaffold/domain.go.tmpl", "internal/core/domains/" + n + ".go"},
 		{"scaffold/port.go.tmpl", "internal/core/ports/" + n + "_port.go"},
 		{storeTemplate, "internal/adapters/store/" + n + "_store.go"},
 		{"scaffold/service.go.tmpl", "internal/core/services/" + n + "_service.go"},
-		{handlerTemplate, "internal/adapters/http/" + n + "_handler.go"},
+	}
+
+	switch {
+	case data.IsBoth():
+		specs = append(specs,
+			scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/http/" + n + "_handler.go"},
+			scaffoldSpec{"scaffold/handler_api.go.tmpl", "internal/adapters/http/" + n + "_api_handler.go"},
+		)
+	case data.IsSSR():
+		specs = append(specs, scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/http/" + n + "_handler.go"})
+	default:
+		specs = append(specs, scaffoldSpec{"scaffold/handler.go.tmpl", "internal/adapters/http/" + n + "_handler.go"})
 	}
 
 	if data.IsSSR() {

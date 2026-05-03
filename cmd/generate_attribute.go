@@ -83,12 +83,33 @@ func runGenerateAttribute(_ *cobra.Command, args []string) error {
 		fmt.Printf("  dryrun  internal/adapters/store/migrations/NNNNN_add_cols_to_%s.sql\n", data.TableName)
 	}
 
-	// Regenerate domain, store, handler (force overwrite)
+	// Regenerate domain, store, handler(s) (force overwrite)
 	n := strings.ToLower(modelName)
 	regenSpecs := []scaffoldSpec{
 		{"scaffold/domain.go.tmpl", "internal/core/domains/" + n + ".go"},
 		{attributeStoreTemplate(gogenCfg.DB), "internal/adapters/store/" + n + "_store.go"},
-		{attributeHandlerTemplate(cfg), "internal/adapters/http/" + n + "_handler.go"},
+	}
+
+	switch {
+	case cfg.IsBoth():
+		regenSpecs = append(regenSpecs,
+			scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/http/" + n + "_handler.go"},
+			scaffoldSpec{"scaffold/handler_api.go.tmpl", "internal/adapters/http/" + n + "_api_handler.go"},
+		)
+	case cfg.IsSSR():
+		regenSpecs = append(regenSpecs, scaffoldSpec{"scaffold/handler_ssr.go.tmpl", "internal/adapters/http/" + n + "_handler.go"})
+	default:
+		regenSpecs = append(regenSpecs, scaffoldSpec{"scaffold/handler.go.tmpl", "internal/adapters/http/" + n + "_handler.go"})
+	}
+
+	if cfg.IsSSR() {
+		t := data.TableName
+		regenSpecs = append(regenSpecs,
+			scaffoldSpec{"scaffold/pages/index.html.tmpl", "web/templates/pages/" + t + "_index.html"},
+			scaffoldSpec{"scaffold/pages/show.html.tmpl", "web/templates/pages/" + t + "_show.html"},
+			scaffoldSpec{"scaffold/pages/new.html.tmpl", "web/templates/pages/" + t + "_new.html"},
+			scaffoldSpec{"scaffold/pages/edit.html.tmpl", "web/templates/pages/" + t + "_edit.html"},
+		)
 	}
 
 	for _, spec := range regenSpecs {
@@ -107,10 +128,6 @@ func runGenerateAttribute(_ *cobra.Command, args []string) error {
 		if err := os.WriteFile(".gogen.yaml", yamlData, 0644); err != nil {
 			return err
 		}
-
-		if cfg.IsSSR() {
-			fmt.Println("\n  note    SSR views not regenerated — update web/templates/pages/" + data.TableName + "_*.html manually")
-		}
 	}
 
 	fmt.Println("\nDone.")
@@ -124,12 +141,6 @@ func attributeStoreTemplate(db string) string {
 	return "scaffold/store_sqlite.go.tmpl"
 }
 
-func attributeHandlerTemplate(cfg *config.ProjectConfig) string {
-	if cfg.IsSSR() {
-		return "scaffold/handler_ssr.go.tmpl"
-	}
-	return "scaffold/handler.go.tmpl"
-}
 
 func regenFile(tmplPath, outPath string, data *scaffold.Data) error {
 	content, err := render.File(tmplPath, data)

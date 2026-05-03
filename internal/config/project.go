@@ -16,9 +16,10 @@ type ProjectConfig struct {
 }
 
 func (p *ProjectConfig) IsSQLite() bool   { return p.DB == "sqlite" }
-func (p *ProjectConfig) IsPostgres() bool  { return p.DB == "postgres" }
-func (p *ProjectConfig) IsSSR() bool       { return p.RenderMode == "ssr" || p.RenderMode == "both" }
-func (p *ProjectConfig) IsAPI() bool       { return p.RenderMode == "api" || p.RenderMode == "both" }
+func (p *ProjectConfig) IsPostgres() bool { return p.DB == "postgres" }
+func (p *ProjectConfig) IsSSR() bool      { return p.RenderMode == "ssr" || p.RenderMode == "both" }
+func (p *ProjectConfig) IsAPI() bool      { return p.RenderMode == "api" || p.RenderMode == "both" }
+func (p *ProjectConfig) IsBoth() bool     { return p.RenderMode == "both" }
 
 func (p *ProjectConfig) Validate() error {
 	if strings.TrimSpace(p.ProjectName) == "" {

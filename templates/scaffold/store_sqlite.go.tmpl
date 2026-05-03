@@ -8,25 +8,42 @@ import (
 	"[[.ModulePath]]/internal/core/domains"
 )
 
-func (s *Store) Create[[.ModelName]](ctx context.Context, p domains.[[.ModelName]]) (string, error) {
-	id := generateID()
-	_, err := s.DB.ExecContext(ctx,
-		`INSERT INTO [[.TableName]] (id, [[.InsertCols]]) VALUES (?, [[.SQLiteInsert]])`,
-		id, [[.InsertArgs]],
-	)
-	return id, err
+func scan[[.ModelName]](r rowScanner) (domains.[[.ModelName]], error) {
+	var p domains.[[.ModelName]]
+	err := r.Scan([[.ScanArgs]])
+	return p, err
+}
+
+func collect[[.ModelName]]s(rows *sql.Rows) ([]domains.[[.ModelName]], error) {
+	defer rows.Close()
+	var out []domains.[[.ModelName]]
+	for rows.Next() {
+		p, err := scan[[.ModelName]](rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) Create[[.ModelName]](ctx context.Context, p domains.[[.ModelName]]) (domains.[[.ModelName]], error) {
+	p.ID = generateID()
+	return scan[[.ModelName]](s.DB.QueryRowContext(ctx,
+		`INSERT INTO [[.TableName]] (id, [[.InsertCols]]) VALUES (?, [[.SQLiteInsert]]) RETURNING [[.SelectCols]]`,
+		p.ID, [[.InsertArgs]],
+	))
 }
 
 func (s *Store) Get[[.ModelName]](ctx context.Context, id string) (*domains.[[.ModelName]], error) {
-	p := new(domains.[[.ModelName]])
-	err := s.DB.QueryRowContext(ctx,
+	p, err := scan[[.ModelName]](s.DB.QueryRowContext(ctx,
 		`SELECT [[.SelectCols]] FROM [[.TableName]] WHERE id = ?`,
 		id,
-	).Scan([[.ScanArgs]])
+	))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domains.ErrNotFound
 	}
-	return p, err
+	return &p, err
 }
 
 func (s *Store) List[[.ModelName]]s(ctx context.Context) ([]domains.[[.ModelName]], error) {
@@ -36,17 +53,7 @@ func (s *Store) List[[.ModelName]]s(ctx context.Context) ([]domains.[[.ModelName
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var results []domains.[[.ModelName]]
-	for rows.Next() {
-		var p domains.[[.ModelName]]
-		if err := rows.Scan([[.ScanArgs]]); err != nil {
-			return nil, err
-		}
-		results = append(results, p)
-	}
-	return results, rows.Err()
+	return collect[[.ModelName]]s(rows)
 }
 [[range .Refs]]
 func (s *Store) [[.StoreMethod]](ctx context.Context, [[.ParamName]] string) ([]domains.[[$.ModelName]], error) {
@@ -57,17 +64,7 @@ func (s *Store) [[.StoreMethod]](ctx context.Context, [[.ParamName]] string) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var results []domains.[[$.ModelName]]
-	for rows.Next() {
-		var p domains.[[$.ModelName]]
-		if err := rows.Scan([[$.ScanArgs]]); err != nil {
-			return nil, err
-		}
-		results = append(results, p)
-	}
-	return results, rows.Err()
+	return collect[[$.ModelName]]s(rows)
 }
 [[end]]
 func (s *Store) Update[[.ModelName]](ctx context.Context, p domains.[[.ModelName]]) error {

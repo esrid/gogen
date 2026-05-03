@@ -10,15 +10,15 @@ import (
 	"[[.ModulePath]]/internal/core/utils"
 )
 
-type [[.ModelName]]Handler struct {
+type [[.ModelName]]APIHandler struct {
 	service ports.[[.ModelName]]Service
 }
 
-func New[[.ModelName]]Handler(service ports.[[.ModelName]]Service) *[[.ModelName]]Handler {
-	return &[[.ModelName]]Handler{service: service}
+func New[[.ModelName]]APIHandler(service ports.[[.ModelName]]Service) *[[.ModelName]]APIHandler {
+	return &[[.ModelName]]APIHandler{service: service}
 }
 
-func (h *[[.ModelName]]Handler) Route() http.Handler {
+func (h *[[.ModelName]]APIHandler) Route() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", h.list)
 	r.Post("/", h.create)
@@ -31,7 +31,7 @@ func (h *[[.ModelName]]Handler) Route() http.Handler {
 	return r
 }
 
-func (h *[[.ModelName]]Handler) list(w http.ResponseWriter, r *http.Request) {
+func (h *[[.ModelName]]APIHandler) list(w http.ResponseWriter, r *http.Request) {
 [[- if and .Protected .HasUserRef]]
 	userID := domains.GetContextUser(r.Context())
 	if userID == "" {
@@ -58,7 +58,7 @@ func (h *[[.ModelName]]Handler) list(w http.ResponseWriter, r *http.Request) {
 	utils.WriteJSON(w, items)
 }
 
-func (h *[[.ModelName]]Handler) get(w http.ResponseWriter, r *http.Request) {
+func (h *[[.ModelName]]APIHandler) get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	item, err := h.service.Get(r.Context(), id)
 	if err != nil {
@@ -69,7 +69,7 @@ func (h *[[.ModelName]]Handler) get(w http.ResponseWriter, r *http.Request) {
 	utils.WriteJSON(w, item)
 }
 
-func (h *[[.ModelName]]Handler) create(w http.ResponseWriter, r *http.Request) {
+func (h *[[.ModelName]]APIHandler) create(w http.ResponseWriter, r *http.Request) {
 [[- if .Protected]]
 	userID := domains.GetContextUser(r.Context())
 	if userID == "" {
@@ -97,7 +97,7 @@ func (h *[[.ModelName]]Handler) create(w http.ResponseWriter, r *http.Request) {
 	utils.WriteJSON(w, created)
 }
 
-func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
+func (h *[[.ModelName]]APIHandler) update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var m domains.[[.ModelName]]
 	if err := utils.DecodeJSON(r, &m); err != nil {
@@ -114,7 +114,7 @@ func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
 	utils.WriteJSON(w, m)
 }
 
-func (h *[[.ModelName]]Handler) delete(w http.ResponseWriter, r *http.Request) {
+func (h *[[.ModelName]]APIHandler) delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.service.Delete(r.Context(), id); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -124,7 +124,7 @@ func (h *[[.ModelName]]Handler) delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 [[range .Refs]][[if not .IsUserRef]]
-func (h *[[$.ModelName]]Handler) listBy[[.RefModel]](w http.ResponseWriter, r *http.Request) {
+func (h *[[$.ModelName]]APIHandler) listBy[[.RefModel]](w http.ResponseWriter, r *http.Request) {
 	[[.ParamName]] := chi.URLParam(r, "[[.ParamName]]")
 	items, err := h.service.[[.ServiceMethod]](r.Context(), [[.ParamName]])
 	if err != nil {

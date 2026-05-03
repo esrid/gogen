@@ -16,12 +16,11 @@ func New[[.ModelName]]Service(store ports.[[.ModelName]]Store) *[[.ModelName]]Se
 }
 
 func (s *[[.ModelName]]Service) Create(ctx context.Context, m domains.[[.ModelName]]) (*domains.[[.ModelName]], error) {
-	id, err := s.store.Create[[.ModelName]](ctx, m)
+	created, err := s.store.Create[[.ModelName]](ctx, m)
 	if err != nil {
 		return nil, err
 	}
-	m.ID = id
-	return &m, nil
+	return &created, nil
 }
 
 func (s *[[.ModelName]]Service) Get(ctx context.Context, id string) (*domains.[[.ModelName]], error) {

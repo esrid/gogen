@@ -114,6 +114,7 @@ func authFileSpecs(cfg *config.ProjectConfig) (infra, new []generator.FileSpec) 
 	infra = []generator.FileSpec{
 		generator.S("new/base/main.go.tmpl", "main.go"),
 		generator.S("new/base/internal/server/routes.go.tmpl", "internal/server/routes.go"),
+		generator.S("new/base/internal/server/wire_gen.go.tmpl", "internal/server/wire_gen.go"),
 		generator.S("new/base/internal/core/domains/errors.go.tmpl", "internal/core/domains/errors.go"),
 	}
 

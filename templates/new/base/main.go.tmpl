@@ -7,12 +7,7 @@ import (
 	"net/http"
 	"os"
 	"time"
-[[- if .Auth]]
 
-	api "[[.ModulePath]]/internal/adapters/http"
-	"[[.ModulePath]]/internal/adapters/external/email"
-	"[[.ModulePath]]/internal/core/services"
-[[- end]]
 	"[[.ModulePath]]/internal/adapters/store"
 	"[[.ModulePath]]/internal/server"
 [[- if .IsSSR]]
@@ -42,25 +37,13 @@ func main() {
 	}
 [[- end]]
 
-	handlers := &server.Handler{Store: dbStore}
-	// gogen:inject:services
-[[- if .Auth]]
-
-	emailProvider := email.NewNoopProvider()
-	sessionService := services.NewSessionService(dbStore)
-	userService := services.NewAuthService(dbStore, emailProvider)
-	handlers.Auth = api.NewAuthHandler(userService, dbStore, sessionService, logger)
-[[- end]]
+	handlers := server.WireHandlers(dbStore, logger)
 [[- if .IsSSR]]
 
 	staticHandler := web.GetStaticHandler()
 [[- end]]
 
-	mux := server.NewRouter(
-		handlers,
-		[[if .IsSSR]]staticHandler[[else]]nil[[end]],
-		[[if .Auth]]sessionService[[else]]nil[[end]],
-	)
+	mux := server.NewRouter(handlers, [[if .IsSSR]]staticHandler[[else]]nil[[end]])
 
 	s := &http.Server{
 		Addr:              cfg.ServerPort,

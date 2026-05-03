@@ -108,6 +108,7 @@ func fileSpecs(cfg *config.ProjectConfig) []FileSpec {
 		s("new/base/internal/server/config.go.tmpl", "internal/server/config.go"),
 		s("new/base/internal/server/server.go.tmpl", "internal/server/server.go"),
 		s("new/base/internal/server/routes.go.tmpl", "internal/server/routes.go"),
+		s("new/base/internal/server/wire_gen.go.tmpl", "internal/server/wire_gen.go"),
 		s("new/base/internal/adapters/http/middleware.go.tmpl", "internal/adapters/http/middleware.go"),
 		s("new/base/internal/core/domains/errors.go.tmpl", "internal/core/domains/errors.go"),
 		s("new/base/internal/core/ports/session_port.go.tmpl", "internal/core/ports/session_port.go"),
