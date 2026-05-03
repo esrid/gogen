@@ -1,0 +1,45 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"time"
+
+	_ "modernc.org/sqlite"
+)
+
+type Store struct {
+	DB *sql.DB
+}
+
+func NewStore(ctx context.Context) (*Store, error) {
+	conn := os.Getenv("DATABASE_URL")
+	if conn == "" {
+		conn = "[[.ProjectName]].db"
+	}
+
+	db, err := sql.Open("sqlite", conn)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(time.Hour)
+
+	if err = db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("ping database: %w", err)
+	}
+
+	if _, err = db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+		return nil, fmt.Errorf("enable foreign keys: %w", err)
+	}
+
+	if _, err = db.ExecContext(ctx, "PRAGMA journal_mode = WAL"); err != nil {
+		return nil, fmt.Errorf("enable WAL: %w", err)
+	}
+
+	return &Store{DB: db}, nil
+}

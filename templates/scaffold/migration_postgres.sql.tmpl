@@ -1,0 +1,15 @@
+-- +goose Up
+
+CREATE TABLE IF NOT EXISTS [[.TableName]] (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  [[- range .Fields]]
+  [[.Name]] [[.PGCol]],
+  [[- end]]
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+[[range .Fields]][[if .IsRef]]
+CREATE INDEX IF NOT EXISTS idx_[[$.TableName]]_[[.Name]] ON [[$.TableName]] ([[.Name]]);
+[[end]][[end]]
+-- +goose Down
+DROP TABLE IF EXISTS [[.TableName]];

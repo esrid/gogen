@@ -1,0 +1,37 @@
+{{component "layout"}}
+  {{fill "title"}}Settings{{end}}
+  {{fill "content"}}
+  <div class="settings">
+    <h1>Settings</h1>
+    {{if .Flash}}
+      {{component "flash"}}
+        {{fill "type"}}{{.Flash.Type}}{{end}}
+        {{fill "message"}}{{.Flash.Message}}{{end}}
+      {{end}}
+    {{end}}
+
+    <section>
+      <h2>Change Password</h2>
+      <form method="POST" action="/auth/change-password">
+        <div class="field">
+          <label for="current_password">Current Password</label>
+          <input type="password" id="current_password" name="current_password" required />
+        </div>
+        <div class="field">
+          <label for="new_password">New Password</label>
+          <input type="password" id="new_password" name="new_password" required autocomplete="new-password" />
+        </div>
+        <button type="submit">Update Password</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>Delete Account</h2>
+      <p>This action is permanent and cannot be undone.</p>
+      <form method="POST" action="/auth/delete-account">
+        <button type="submit" class="btn-danger">Delete My Account</button>
+      </form>
+    </section>
+  </div>
+  {{end}}
+{{end}}

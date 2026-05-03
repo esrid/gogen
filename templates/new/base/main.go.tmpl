@@ -1,0 +1,79 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"time"
+[[- if .Auth]]
+
+	api "[[.ModulePath]]/internal/adapters/http"
+	"[[.ModulePath]]/internal/adapters/external/email"
+	"[[.ModulePath]]/internal/core/services"
+[[- end]]
+	"[[.ModulePath]]/internal/adapters/store"
+	"[[.ModulePath]]/internal/server"
+[[- if .IsSSR]]
+	"[[.ModulePath]]/web"
+[[- end]]
+)
+
+func main() {
+	cfg := server.Load()
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+[[- if .IsSQLite]]
+	dbStore, err := store.NewStore(ctx)
+[[- else]]
+	dbStore, err := store.NewStore(ctx, cfg.DatabaseURL)
+[[- end]]
+	if err != nil {
+		logger.Error("unable to connect to database", slog.String("error", err.Error()))
+		return
+	}
+[[- if .IsSQLite]]
+
+	if err := dbStore.RunMigrations(ctx, logger); err != nil {
+		logger.Error("unable to run migrations", slog.String("error", err.Error()))
+		return
+	}
+[[- end]]
+
+	handlers := &server.Handler{Store: dbStore}
+[[- if .Auth]]
+
+	emailProvider := email.NewNoopProvider()
+	sessionService := services.NewSessionService(dbStore)
+	userService := services.NewAuthService(dbStore, emailProvider)
+	handlers.Auth = api.NewAuthHandler(userService, dbStore, sessionService, logger)
+[[- end]]
+[[- if .IsSSR]]
+
+	staticHandler := web.GetStaticHandler()
+[[- end]]
+
+	mux := server.NewRouter(
+		handlers,
+		[[if .IsSSR]]staticHandler[[else]]nil[[end]],
+		[[if .Auth]]sessionService[[else]]nil[[end]],
+	)
+
+	s := &http.Server{
+		Addr:              cfg.ServerPort,
+		Handler:           mux,
+		ReadTimeout:       5 * time.Second,
+		ReadHeaderTimeout: 2 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
+		BaseContext: func(l net.Listener) context.Context {
+			return ctx
+		},
+	}
+
+	server.RunServer(ctx, logger, s)
+}

@@ -1,0 +1,36 @@
+package web
+
+import (
+	"embed"
+	"html/template"
+	"net/http"
+	"os"
+)
+
+//go:embed all:templates
+var templateFS embed.FS
+
+var tmpls *template.Template
+
+func init() {
+	funcMap := template.FuncMap{
+		"isDev": func() bool {
+			env := os.Getenv("ENVIRONMENT")
+			return env == "dev" || env == "development" || env == ""
+		},
+	}
+
+	tmpls = template.Must(
+		template.New("").Funcs(funcMap).ParseFS(templateFS,
+			"templates/layout.html",
+			"templates/components/*.html",
+			"templates/pages/*.html",
+		),
+	)
+}
+
+func Render(w http.ResponseWriter, name string, data any) {
+	if err := tmpls.ExecuteTemplate(w, name, data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}

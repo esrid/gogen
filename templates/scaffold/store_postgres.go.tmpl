@@ -1,0 +1,85 @@
+package store
+
+import (
+	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5"
+
+	"[[.ModulePath]]/internal/core/domains"
+)
+
+func (s *Store) Create[[.ModelName]](ctx context.Context, p domains.[[.ModelName]]) (string, error) {
+	var id string
+	err := s.Pool.QueryRow(ctx,
+		`INSERT INTO [[.TableName]] ([[.InsertCols]]) VALUES ([[.PGInsert]]) RETURNING id`,
+		[[.InsertArgs]],
+	).Scan(&id)
+	return id, err
+}
+
+func (s *Store) Get[[.ModelName]](ctx context.Context, id string) (*domains.[[.ModelName]], error) {
+	p := new(domains.[[.ModelName]])
+	err := s.Pool.QueryRow(ctx,
+		`SELECT [[.SelectCols]] FROM [[.TableName]] WHERE id = $1`,
+		id,
+	).Scan([[.ScanArgs]])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domains.ErrNotFound
+	}
+	return p, err
+}
+
+func (s *Store) List[[.ModelName]]s(ctx context.Context) ([]domains.[[.ModelName]], error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT [[.SelectCols]] FROM [[.TableName]] ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []domains.[[.ModelName]]
+	for rows.Next() {
+		var p domains.[[.ModelName]]
+		if err := rows.Scan([[.ScanArgs]]); err != nil {
+			return nil, err
+		}
+		results = append(results, p)
+	}
+	return results, rows.Err()
+}
+[[range .Refs]]
+func (s *Store) [[.StoreMethod]](ctx context.Context, [[.ParamName]] string) ([]domains.[[$.ModelName]], error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT [[$.SelectCols]] FROM [[$.TableName]] WHERE [[.FieldName]] = $1 ORDER BY created_at DESC`,
+		[[.ParamName]],
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []domains.[[$.ModelName]]
+	for rows.Next() {
+		var p domains.[[$.ModelName]]
+		if err := rows.Scan([[$.ScanArgs]]); err != nil {
+			return nil, err
+		}
+		results = append(results, p)
+	}
+	return results, rows.Err()
+}
+[[end]]
+func (s *Store) Update[[.ModelName]](ctx context.Context, p domains.[[.ModelName]]) error {
+	_, err := s.Pool.Exec(ctx,
+		`UPDATE [[.TableName]] SET [[.PGUpdate]], updated_at = NOW() WHERE id = [[.PGUpdateWhereN]]`,
+		[[.UpdateArgs]],
+	)
+	return err
+}
+
+func (s *Store) Delete[[.ModelName]](ctx context.Context, id string) error {
+	_, err := s.Pool.Exec(ctx, `DELETE FROM [[.TableName]] WHERE id = $1`, id)
+	return err
+}

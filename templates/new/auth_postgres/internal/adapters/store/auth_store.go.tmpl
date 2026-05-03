@@ -1,0 +1,171 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"[[.ModulePath]]/internal/core/domains"
+)
+
+func (s *Store) CreateUser(ctx context.Context, u domains.User) (string, string, error) {
+	var id, token string
+
+	err := s.withTx(ctx, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`INSERT INTO users (email, password_hash, timezone) VALUES ($1, $2, $3) RETURNING id`,
+			u.Email, u.PasswordHash, u.Timezone,
+		).Scan(&id)
+		if err != nil {
+			return err
+		}
+
+		err = tx.QueryRow(ctx,
+			`INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, gen_random_uuid()::text, NOW() + INTERVAL '30 days') RETURNING token`,
+			id,
+		).Scan(&token)
+		return err
+	})
+	return id, token, err
+}
+
+func (s *Store) QueryUserByEmail(ctx context.Context, email string) (*domains.User, error) {
+	u := new(domains.User)
+	err := s.Pool.QueryRow(ctx,
+		`SELECT id, email, password_hash, full_name, avatar_url, timezone FROM users WHERE email = $1 AND deleted_at IS NULL`,
+		email,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.FullName, &u.AvatarURL, &u.Timezone)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domains.ErrUserNotFound
+	}
+	return u, err
+}
+
+func (s *Store) QueryUserByID(ctx context.Context, id string) (*domains.User, error) {
+	u := new(domains.User)
+	err := s.Pool.QueryRow(ctx,
+		`SELECT id, email, password_hash, full_name, avatar_url, timezone FROM users WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.FullName, &u.AvatarURL, &u.Timezone)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domains.ErrUserNotFound
+	}
+	return u, err
+}
+
+func (s *Store) CreateSessionForUser(ctx context.Context, userID string) (string, error) {
+	var token string
+	err := s.Pool.QueryRow(ctx,
+		`INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, gen_random_uuid()::text, NOW() + INTERVAL '30 days') RETURNING token`,
+		userID,
+	).Scan(&token)
+	return token, err
+}
+
+func (s *Store) GetUserFromToken(ctx context.Context, token string) (string, *time.Time, error) {
+	var userID string
+	var expiresAt time.Time
+	err := s.Pool.QueryRow(ctx,
+		`SELECT user_id, expires_at FROM sessions WHERE token = $1`,
+		token,
+	).Scan(&userID, &expiresAt)
+	if err != nil {
+		return "", nil, err
+	}
+	return userID, &expiresAt, nil
+}
+
+func (s *Store) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
+	_, err := s.Pool.Exec(ctx,
+		`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+		hashedPassword, userID,
+	)
+	return err
+}
+
+func (s *Store) DeleteUser(ctx context.Context, userID string) error {
+	return s.withTx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE users SET deleted_at = NOW() WHERE id = $1`, userID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
+		return err
+	})
+}
+
+func (s *Store) CreatePasswordResetToken(ctx context.Context, userID, token string, expiresAt time.Time) error {
+	_, err := s.Pool.Exec(ctx,
+		`INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)`,
+		userID, token, expiresAt,
+	)
+	return err
+}
+
+func (s *Store) ResetPassword(ctx context.Context, token, hashedPassword string) error {
+	return s.withTx(ctx, func(tx pgx.Tx) error {
+		var userID string
+		var expiresAt time.Time
+		var used bool
+
+		err := tx.QueryRow(ctx,
+			`SELECT user_id, expires_at, used FROM password_reset_tokens WHERE token = $1`,
+			token,
+		).Scan(&userID, &expiresAt, &used)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errors.New("invalid token")
+		}
+		if err != nil {
+			return err
+		}
+		if time.Now().After(expiresAt) {
+			return errors.New("token expired")
+		}
+		if used {
+			return errors.New("token already used")
+		}
+
+		if _, err = tx.Exec(ctx, `UPDATE users SET password_hash = $1 WHERE id = $2`, hashedPassword, userID); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `UPDATE password_reset_tokens SET used = true WHERE token = $1`, token); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
+		return err
+	})
+}
+
+func (s *Store) CanRequestPasswordReset(ctx context.Context, email, ipAddress string) (bool, error) {
+	var count int
+	err := s.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM password_reset_attempts WHERE email = $1 AND attempted_at > NOW() - INTERVAL '1 hour'`,
+		email,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	if count >= 3 {
+		return false, nil
+	}
+	_, err = s.Pool.Exec(ctx,
+		`INSERT INTO password_reset_attempts (email, ip_address) VALUES ($1, $2)`,
+		email, ipAddress,
+	)
+	return true, err
+}
+
+func (s *Store) withTx(ctx context.Context, fn func(tx pgx.Tx) error) error {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err = fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}

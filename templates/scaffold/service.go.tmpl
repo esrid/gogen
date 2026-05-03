@@ -1,0 +1,45 @@
+package services
+
+import (
+	"context"
+
+	"[[.ModulePath]]/internal/core/domains"
+	"[[.ModulePath]]/internal/core/ports"
+)
+
+type [[.ModelName]]Service struct {
+	store ports.[[.ModelName]]Store
+}
+
+func New[[.ModelName]]Service(store ports.[[.ModelName]]Store) *[[.ModelName]]Service {
+	return &[[.ModelName]]Service{store: store}
+}
+
+func (s *[[.ModelName]]Service) Create(ctx context.Context, m domains.[[.ModelName]]) (*domains.[[.ModelName]], error) {
+	id, err := s.store.Create[[.ModelName]](ctx, m)
+	if err != nil {
+		return nil, err
+	}
+	m.ID = id
+	return &m, nil
+}
+
+func (s *[[.ModelName]]Service) Get(ctx context.Context, id string) (*domains.[[.ModelName]], error) {
+	return s.store.Get[[.ModelName]](ctx, id)
+}
+
+func (s *[[.ModelName]]Service) List(ctx context.Context) ([]domains.[[.ModelName]], error) {
+	return s.store.List[[.ModelName]]s(ctx)
+}
+[[range .Refs]]
+func (s *[[$.ModelName]]Service) [[.ServiceMethod]](ctx context.Context, [[.ParamName]] string) ([]domains.[[$.ModelName]], error) {
+	return s.store.[[.StoreMethod]](ctx, [[.ParamName]])
+}
+[[end]]
+func (s *[[.ModelName]]Service) Update(ctx context.Context, m domains.[[.ModelName]]) error {
+	return s.store.Update[[.ModelName]](ctx, m)
+}
+
+func (s *[[.ModelName]]Service) Delete(ctx context.Context, id string) error {
+	return s.store.Delete[[.ModelName]](ctx, id)
+}

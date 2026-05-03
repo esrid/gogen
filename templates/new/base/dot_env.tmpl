@@ -1,0 +1,7 @@
+ENVIRONMENT=dev
+SERVER_PORT=8080
+[[- if .IsSQLite]]
+DATABASE_URL=[[.ProjectName]].db
+[[- else]]
+DATABASE_URL=postgres://admin:password@localhost:5432/[[.ProjectName]]?sslmode=disable
+[[- end]]

@@ -1,0 +1,136 @@
+package http
+
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	"[[.ModulePath]]/internal/core/domains"
+	"[[.ModulePath]]/internal/core/ports"
+	"[[.ModulePath]]/internal/core/utils"
+)
+
+type [[.ModelName]]Handler struct {
+	service ports.[[.ModelName]]Service
+}
+
+func New[[.ModelName]]Handler(service ports.[[.ModelName]]Service) *[[.ModelName]]Handler {
+	return &[[.ModelName]]Handler{service: service}
+}
+
+func (h *[[.ModelName]]Handler) Route() http.Handler {
+	r := chi.NewRouter()
+	r.Get("/", h.list)
+	r.Post("/", h.create)
+	r.Get("/{id}", h.get)
+	r.Put("/{id}", h.update)
+	r.Delete("/{id}", h.delete)
+	return r
+}
+
+func (h *[[.ModelName]]Handler) list(w http.ResponseWriter, r *http.Request) {
+[[- if and .Protected .HasUserRef]]
+	userID := domains.GetContextUser(r.Context())
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		utils.WriteJSON(w, map[string]string{"error": "unauthorized"})
+		return
+	}
+	items, err := h.service.[[.UserRef.ServiceMethod]](r.Context(), userID)
+[[- else if .Protected]]
+	if domains.GetContextUser(r.Context()) == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		utils.WriteJSON(w, map[string]string{"error": "unauthorized"})
+		return
+	}
+	items, err := h.service.List(r.Context())
+[[- else]]
+	items, err := h.service.List(r.Context())
+[[- end]]
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		utils.WriteJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	utils.WriteJSON(w, items)
+}
+
+func (h *[[.ModelName]]Handler) get(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	item, err := h.service.Get(r.Context(), id)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		utils.WriteJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	utils.WriteJSON(w, item)
+}
+
+func (h *[[.ModelName]]Handler) create(w http.ResponseWriter, r *http.Request) {
+[[- if .Protected]]
+	userID := domains.GetContextUser(r.Context())
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		utils.WriteJSON(w, map[string]string{"error": "unauthorized"})
+		return
+	}
+[[- end]]
+	var m domains.[[.ModelName]]
+	if err := utils.DecodeJSON(r, &m); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		utils.WriteJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+[[- if and .Protected .HasUserRef]]
+	m.[[.UserRefGoName]] = userID
+[[- end]]
+	created, err := h.service.Create(r.Context(), m)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		utils.WriteJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	utils.WriteJSON(w, created)
+}
+
+func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+[[- if .Protected]]
+	if domains.GetContextUser(r.Context()) == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		utils.WriteJSON(w, map[string]string{"error": "unauthorized"})
+		return
+	}
+[[- end]]
+	var m domains.[[.ModelName]]
+	if err := utils.DecodeJSON(r, &m); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		utils.WriteJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	m.ID = id
+	if err := h.service.Update(r.Context(), m); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		utils.WriteJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	utils.WriteJSON(w, m)
+}
+
+func (h *[[.ModelName]]Handler) delete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+[[- if .Protected]]
+	if domains.GetContextUser(r.Context()) == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		utils.WriteJSON(w, map[string]string{"error": "unauthorized"})
+		return
+	}
+[[- end]]
+	if err := h.service.Delete(r.Context(), id); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		utils.WriteJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

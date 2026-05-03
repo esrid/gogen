@@ -1,0 +1,109 @@
+package utils
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/mail"
+	"net/netip"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+const (
+	sessionMaxAge = 30 * 24 * time.Hour
+)
+
+var bufferPool = sync.Pool{
+	New: func() any { return new(bytes.Buffer) },
+}
+
+func WriteJSON(w http.ResponseWriter, v any) error {
+	buf := bufferPool.Get().(*bytes.Buffer)
+	defer func() { buf.Reset(); bufferPool.Put(buf) }()
+	if err := json.NewEncoder(buf).Encode(v); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+func DecodeJSON(r *http.Request, dst any) error {
+	defer r.Body.Close()
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&dst); err != nil {
+		return err
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		return errors.New("body must contain a single JSON object")
+	}
+	return nil
+}
+
+func SetSessionCookie(w http.ResponseWriter, r *http.Request, name, token string, remember bool) {
+	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	maxAge := int(sessionMaxAge.Seconds())
+	if remember {
+		maxAge = 30 * 24 * 60 * 60
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   maxAge,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func ClearSessionCookie(w http.ResponseWriter, r *http.Request, name string) {
+	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+func ValidateEmail(email string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	if normalized == "" {
+		return "", errors.New("email is required")
+	}
+	address, err := mail.ParseAddress(normalized)
+	if err != nil {
+		return "", errors.New("invalid email format")
+	}
+	return address.Address, nil
+}
+
+func GetIPAddress(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if addr, err := netip.ParseAddr(xff); err == nil {
+			return addr.String()
+		}
+	}
+	if addrPort, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
+		return addrPort.Addr().String()
+	}
+	return r.RemoteAddr
+}
+
+func GetFullURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host + r.URL.Path
+}

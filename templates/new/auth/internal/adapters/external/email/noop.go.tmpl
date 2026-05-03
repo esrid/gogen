@@ -1,0 +1,16 @@
+package email
+
+import "context"
+
+// NoopProvider discards all emails. Swap for a real provider (SES, Resend, SMTP).
+type NoopProvider struct{}
+
+func NewNoopProvider() *NoopProvider { return &NoopProvider{} }
+
+func (n *NoopProvider) SendPasswordReset(_ context.Context, to, token string) error {
+	return nil
+}
+
+func (n *NoopProvider) SendWelcome(_ context.Context, to string) error {
+	return nil
+}

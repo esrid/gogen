@@ -1,0 +1,55 @@
+package services
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"[[.ModulePath]]/internal/core/ports"
+)
+
+type cachedSession struct {
+	userID    string
+	expiresAt time.Time
+}
+
+type SessionService struct {
+	store ports.SessionStore
+	cache sync.Map
+}
+
+func NewSessionService(s ports.SessionStore) *SessionService {
+	return &SessionService{store: s}
+}
+
+func (s *SessionService) Create(_ context.Context, token, userID string) (string, error) {
+	s.cache.Store(token, cachedSession{
+		userID:    userID,
+		expiresAt: time.Now().Add(30 * 24 * time.Hour),
+	})
+	return token, nil
+}
+
+func (s *SessionService) Validate(ctx context.Context, token string) (string, error) {
+	if val, ok := s.cache.Load(token); ok {
+		sess := val.(cachedSession)
+		if time.Now().After(sess.expiresAt) {
+			s.cache.Delete(token)
+			return "", fmt.Errorf("session expired")
+		}
+		return sess.userID, nil
+	}
+
+	userID, expiresAt, err := s.store.GetUserFromToken(ctx, token)
+	if err != nil {
+		return "", err
+	}
+
+	if time.Now().After(*expiresAt) {
+		return "", fmt.Errorf("session expired")
+	}
+
+	s.cache.Store(token, cachedSession{userID: userID, expiresAt: *expiresAt})
+	return userID, nil
+}

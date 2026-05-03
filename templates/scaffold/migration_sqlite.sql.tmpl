@@ -1,0 +1,20 @@
+-- +goose Up
+-- +goose StatementBegin
+
+CREATE TABLE IF NOT EXISTS [[.TableName]] (
+  id TEXT PRIMARY KEY,
+  [[- range .Fields]]
+  [[.Name]] [[.SQLiteCol]],
+  [[- end]]
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+[[range .Fields]][[if .IsRef]]
+CREATE INDEX IF NOT EXISTS idx_[[$.TableName]]_[[.Name]] ON [[$.TableName]] ([[.Name]]);
+[[end]][[end]]
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TABLE IF EXISTS [[.TableName]];
+-- +goose StatementEnd

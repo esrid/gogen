@@ -1,0 +1,194 @@
+package http
+
+import (
+	"log/slog"
+	"net/http"
+	"net/url"
+
+	"[[.ModulePath]]/internal/core/domains"
+	"[[.ModulePath]]/internal/core/ports"
+	"[[.ModulePath]]/internal/core/utils"
+[[- if .IsSSR]]
+	"[[.ModulePath]]/web"
+[[- end]]
+	"github.com/go-chi/chi/v5"
+)
+
+type AuthHandler struct {
+	userService    ports.UserService
+	userStore      ports.UserStore
+	sessionService ports.SessionService
+	logger         *slog.Logger
+}
+
+func NewAuthHandler(us ports.UserService, st ports.UserStore, ss ports.SessionService, l *slog.Logger) *AuthHandler {
+	return &AuthHandler{userService: us, userStore: st, sessionService: ss, logger: l}
+}
+
+func (h *AuthHandler) Route() http.Handler {
+	r := chi.NewRouter()
+
+	r.Get("/login", h.showLogin)
+	r.Post("/login", h.handleLogin)
+	r.Get("/signup", h.showSignup)
+	r.Post("/signup", h.handleSignup)
+	r.Get("/forgot-password", h.showForgotPassword)
+	r.Post("/forgot-password", h.handleForgotPassword)
+	r.Get("/reset-password", h.showResetPassword)
+	r.Post("/reset-password", h.handleResetPassword)
+	r.Post("/logout", h.handleLogout)
+
+	r.Group(func(r chi.Router) {
+		r.Use(RequireAuth(h.sessionService))
+		r.Get("/settings", h.showSettings)
+		r.Post("/settings/password", h.handleChangePassword)
+		r.Post("/settings/delete", h.handleDeleteAccount)
+	})
+
+	return r
+}
+
+func (h *AuthHandler) showLogin(w http.ResponseWriter, r *http.Request) {
+	data := map[string]any{
+		"Title": "Login",
+		"Error": r.URL.Query().Get("error"),
+		"Msg":   r.URL.Query().Get("msg"),
+	}
+[[- if .IsSSR]]
+	web.Render(w, "login.html", data)
+[[- else]]
+	utils.WriteJSON(w, data)
+[[- end]]
+}
+
+func (h *AuthHandler) showSignup(w http.ResponseWriter, r *http.Request) {
+	data := map[string]any{
+		"Title": "Sign Up",
+		"Error": r.URL.Query().Get("error"),
+	}
+[[- if .IsSSR]]
+	web.Render(w, "signup.html", data)
+[[- else]]
+	utils.WriteJSON(w, data)
+[[- end]]
+}
+
+func (h *AuthHandler) showForgotPassword(w http.ResponseWriter, r *http.Request) {
+	data := map[string]any{
+		"Title": "Forgot Password",
+		"Error": r.URL.Query().Get("error"),
+	}
+[[- if .IsSSR]]
+	web.Render(w, "forgot-password.html", data)
+[[- else]]
+	utils.WriteJSON(w, data)
+[[- end]]
+}
+
+func (h *AuthHandler) showResetPassword(w http.ResponseWriter, r *http.Request) {
+	data := map[string]any{
+		"Title": "Reset Password",
+		"Token": r.URL.Query().Get("token"),
+		"Error": r.URL.Query().Get("error"),
+	}
+[[- if .IsSSR]]
+	web.Render(w, "reset-password.html", data)
+[[- else]]
+	utils.WriteJSON(w, data)
+[[- end]]
+}
+
+func (h *AuthHandler) showSettings(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(domains.UserContextKey).(string)
+	user, _ := h.userStore.QueryUserByID(r.Context(), userID)
+	data := map[string]any{
+		"Title": "Settings",
+		"User":  user,
+		"Error": r.URL.Query().Get("error"),
+		"Msg":   r.URL.Query().Get("msg"),
+	}
+[[- if .IsSSR]]
+	web.Render(w, "settings.html", data)
+[[- else]]
+	utils.WriteJSON(w, data)
+[[- end]]
+}
+
+func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
+	email := r.PostFormValue("email")
+	password := r.PostFormValue("password")
+	timezone := r.PostFormValue("timezone")
+	remember := r.PostFormValue("remember") == "on"
+
+	_, token, err := h.userService.Login(r.Context(), email, password, timezone)
+	if err != nil {
+		h.logger.Warn("login failed", "email", email, "error", err)
+		http.Redirect(w, r, "/auth/login?error=invalid_credentials", http.StatusSeeOther)
+		return
+	}
+
+	utils.SetSessionCookie(w, r, "session_token", token, remember)
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+}
+
+func (h *AuthHandler) handleSignup(w http.ResponseWriter, r *http.Request) {
+	var input domains.NewUser
+	input.Email = r.PostFormValue("email")
+	input.Password = r.PostFormValue("password")
+	input.Repeat = r.PostFormValue("confirmPassword")
+	input.Timezone = r.PostFormValue("timezone")
+
+	if err := utils.NewUserValidation(&input); err != nil {
+		http.Redirect(w, r, "/auth/signup?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+
+	_, token, err := h.userService.Signup(r.Context(), &input)
+	if err != nil {
+		h.logger.Error("signup failed", "error", err)
+		http.Redirect(w, r, "/auth/signup?error=server_error", http.StatusSeeOther)
+		return
+	}
+
+	utils.SetSessionCookie(w, r, "session_token", token, false)
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+}
+
+func (h *AuthHandler) handleForgotPassword(w http.ResponseWriter, r *http.Request) {
+	_ = h.userService.ForgotPassword(r.Context(), r.PostFormValue("email"), utils.GetIPAddress(r))
+	http.Redirect(w, r, "/auth/login?msg=reset_sent", http.StatusSeeOther)
+}
+
+func (h *AuthHandler) handleResetPassword(w http.ResponseWriter, r *http.Request) {
+	token := r.PostFormValue("token")
+	if err := h.userService.ResetPassword(r.Context(), token, r.PostFormValue("new_password")); err != nil {
+		http.Redirect(w, r, "/auth/reset-password?token="+token+"&error=failed", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/auth/login?msg=password_updated", http.StatusSeeOther)
+}
+
+func (h *AuthHandler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(domains.UserContextKey).(string)
+	err := h.userService.ChangePassword(r.Context(), userID, r.PostFormValue("old_password"), r.PostFormValue("new_password"))
+	if err != nil {
+		http.Redirect(w, r, "/auth/settings?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/auth/settings?msg=password_changed", http.StatusSeeOther)
+}
+
+func (h *AuthHandler) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(domains.UserContextKey).(string)
+	if err := h.userService.DeleteAccount(r.Context(), userID); err != nil {
+		http.Redirect(w, r, "/auth/settings?error=failed", http.StatusSeeOther)
+		return
+	}
+	utils.ClearSessionCookie(w, r, "session_token")
+	http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+}
+
+func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
+	utils.ClearSessionCookie(w, r, "session_token")
+	http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+}

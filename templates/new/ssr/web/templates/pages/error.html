@@ -1,0 +1,10 @@
+{{component "layout"}}
+  {{fill "title"}}Error{{end}}
+  {{fill "content"}}
+  <div class="error-page">
+    <h1>{{if .Code}}{{.Code}}{{else}}Error{{end}}</h1>
+    <p>{{if .Message}}{{.Message}}{{else}}Something went wrong.{{end}}</p>
+    <a href="/">Go home</a>
+  </div>
+  {{end}}
+{{end}}

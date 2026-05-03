@@ -1,0 +1,29 @@
+package ports
+
+import (
+	"context"
+	"time"
+
+	"[[.ModulePath]]/internal/core/domains"
+)
+
+type UserStore interface {
+	CreateUser(ctx context.Context, u domains.User) (string, string, error)
+	QueryUserByEmail(ctx context.Context, email string) (*domains.User, error)
+	QueryUserByID(ctx context.Context, id string) (*domains.User, error)
+	CreateSessionForUser(ctx context.Context, userID string) (string, error)
+	UpdatePassword(ctx context.Context, userID, hashedPassword string) error
+	DeleteUser(ctx context.Context, userID string) error
+	CreatePasswordResetToken(ctx context.Context, userID, token string, expiresAt time.Time) error
+	ResetPassword(ctx context.Context, token, hashedPassword string) error
+	CanRequestPasswordReset(ctx context.Context, email, ipAddress string) (bool, error)
+}
+
+type UserService interface {
+	Login(ctx context.Context, email, password, timezone string) (string, string, error)
+	Signup(ctx context.Context, u *domains.NewUser) (string, string, error)
+	ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error
+	DeleteAccount(ctx context.Context, userID string) error
+	ForgotPassword(ctx context.Context, emailAddr, ipAddress string) error
+	ResetPassword(ctx context.Context, token, newPassword string) error
+}

@@ -1,0 +1,32 @@
+package web
+
+import (
+	"embed"
+	"io/fs"
+	"net/http"
+	"os"
+
+	"github.com/go-chi/chi/v5"
+)
+
+//go:embed static
+var staticFS embed.FS
+
+func GetStaticHandler() http.Handler {
+	env := os.Getenv("ENVIRONMENT")
+	isDev := env == "dev" || env == "development" || env == ""
+
+	if isDev {
+		return http.StripPrefix("/static/", http.FileServer(http.Dir("web/static")))
+	}
+
+	sub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		panic("failed to create static sub FS: " + err.Error())
+	}
+	return http.StripPrefix("/static/", http.FileServer(http.FS(sub)))
+}
+
+func MountStatic(r chi.Router, handler http.Handler) {
+	r.Handle("/static/*", handler)
+}

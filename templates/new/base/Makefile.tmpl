@@ -1,0 +1,33 @@
+APP=[[.ProjectName]]
+MIGRATIONS_DIR=./internal/adapters/store/migrations
+[[- if .IsSQLite]]
+DB_URL?=$(DATABASE_URL)
+GOOSE=goose -dir $(MIGRATIONS_DIR) sqlite3 "$(DB_URL)"
+[[- else]]
+DB_URL?=$(DATABASE_URL)
+GOOSE=goose -dir $(MIGRATIONS_DIR) postgres "$(DB_URL)"
+[[- end]]
+
+.PHONY: run build test migrate-up migrate-down migrate-status
+
+run:
+	go run .
+
+build:
+	go build -o $(APP) .
+
+test:
+	go test ./...
+
+migrate-up:
+	$(GOOSE) up
+
+migrate-down:
+	$(GOOSE) down
+
+migrate-status:
+	$(GOOSE) status
+
+migrate-create:
+	@read -p "Migration name: " name; \
+	$(GOOSE) create $$name sql

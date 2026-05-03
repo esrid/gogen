@@ -1,0 +1,8 @@
+package ports
+
+import "context"
+
+type EmailProvider interface {
+	SendPasswordReset(ctx context.Context, to, token string) error
+	SendWelcome(ctx context.Context, to string) error
+}
