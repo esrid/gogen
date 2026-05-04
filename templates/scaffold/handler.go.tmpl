@@ -96,13 +96,19 @@ func (h *[[.ModelName]][[if .IsBoth]]API[[end]]Handler) create(w http.ResponseWr
 
 func (h *[[.ModelName]][[if .IsBoth]]API[[end]]Handler) update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var m domain.[[.ModelName]]
-	if err := utils.DecodeJSON(r, &m); err != nil {
+	// Fetch first so ref fields omitted from the body are preserved.
+	m, err := h.service.Get(r.Context(), id)
+	if err != nil {
+		h.logger.Error("update [[.ModelNameLC]]", "id", id, "error", err)
+		writeError(w, err)
+		return
+	}
+	if err := utils.DecodeJSON(r, m); err != nil {
 		writeError(w, domain.ErrInvalidInput)
 		return
 	}
 	m.ID = id
-	if err := h.service.Update(r.Context(), m); err != nil {
+	if err := h.service.Update(r.Context(), *m); err != nil {
 		h.logger.Error("update [[.ModelNameLC]]", "id", id, "error", err)
 		writeError(w, err)
 		return

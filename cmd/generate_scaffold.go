@@ -91,10 +91,16 @@ func saveScaffoldMeta(cfg *config.GogenYAML, modelName string, fieldArgs []strin
 	if cfg.Scaffolds == nil {
 		cfg.Scaffolds = make(map[string]*config.ScaffoldMeta)
 	}
-	cfg.Scaffolds[modelName] = &config.ScaffoldMeta{
+	// Preserve existing flags (e.g. API: true set by `gogen g api`) when re-scaffolding with --force.
+	existing := cfg.Scaffolds[modelName]
+	meta := &config.ScaffoldMeta{
 		Fields:    fieldArgs,
 		Protected: protected,
 	}
+	if existing != nil {
+		meta.API = existing.API
+	}
+	cfg.Scaffolds[modelName] = meta
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return err
