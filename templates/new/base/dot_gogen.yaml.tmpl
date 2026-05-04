@@ -2,3 +2,13 @@ module: "[[.ModulePath]]"
 db: "[[.DB]]"
 render_mode: "[[.RenderMode]]"
 auth: [[.Auth]]
+[[- if .Auth]]
+scaffolds:
+  User:
+    fields:
+      - email:string
+      - full_name:string
+      - avatar_url:string
+      - timezone:string
+    protected: true
+[[- end]]
