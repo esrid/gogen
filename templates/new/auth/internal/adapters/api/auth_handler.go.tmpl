@@ -1,7 +1,9 @@
 package api
 
 import (
+[[- if .IsSSR]]
 	"errors"
+[[- end]]
 	"log/slog"
 	"net/http"
 [[- if .IsSSR]]

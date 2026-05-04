@@ -3,8 +3,11 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"[[.ModulePath]]/internal/domain"
 )
 
 func HashPassword(password string) (string, error) {
@@ -16,4 +19,23 @@ func HashPassword(password string) (string, error) {
 func PreHashing(password string) string {
 	h := sha256.Sum256([]byte(password))
 	return base64.StdEncoding.EncodeToString(h[:])
+}
+
+func NewUserValidation(u *domain.NewUser) error {
+	if u.Email == "" {
+		return fmt.Errorf("%w: email is required", domain.ErrInvalidInput)
+	}
+	if u.Password == "" {
+		return fmt.Errorf("%w: password is required", domain.ErrInvalidInput)
+	}
+	if u.Password != u.Repeat {
+		return fmt.Errorf("%w: passwords do not match", domain.ErrInvalidInput)
+	}
+	if len(u.Password) < 8 {
+		return fmt.Errorf("%w: password too short", domain.ErrInvalidInput)
+	}
+	if len(u.Password) > 72 {
+		return fmt.Errorf("%w: password too long", domain.ErrInvalidInput)
+	}
+	return nil
 }
