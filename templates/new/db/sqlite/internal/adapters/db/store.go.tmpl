@@ -51,4 +51,11 @@ func generateID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
+func nullStr(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 type rowScanner interface{ Scan(dest ...any) error }

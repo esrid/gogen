@@ -7,6 +7,7 @@ import (
 	"[[.ModulePath]]/internal/domain"
 )
 
+// RequireAuth redirects to /auth/login if no valid session is found.
 func RequireAuth(sessionService domain.SessionService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -24,6 +25,22 @@ func RequireAuth(sessionService domain.SessionService) func(http.Handler) http.H
 
 			ctx := context.WithValue(r.Context(), domain.UserContextKey, userID)
 			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// LoadUser populates the user ID in context when a valid session cookie exists.
+// Unlike RequireAuth it never redirects — use it on public routes that optionally
+// need to know who the caller is (e.g. a public scaffold with user:references).
+func LoadUser(sessionService domain.SessionService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if cookie, err := r.Cookie("session_token"); err == nil {
+				if userID, err := sessionService.Validate(r.Context(), cookie.Value); err == nil {
+					r = r.WithContext(context.WithValue(r.Context(), domain.UserContextKey, userID))
+				}
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }

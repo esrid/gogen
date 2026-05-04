@@ -88,6 +88,8 @@ func (h *[[.ModelName]]Handler) create(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 		return
 	}
+[[- else if .HasUserRef]]
+	userID := domain.GetContextUser(r.Context())
 [[- end]]
 	if err := r.ParseForm(); err != nil {
 		web.RenderError(w, r, err)
@@ -96,7 +98,11 @@ func (h *[[.ModelName]]Handler) create(w http.ResponseWriter, r *http.Request) {
 	var m domain.[[.ModelName]]
 [[- range .Fields]]
 [[- if .IsRef]]
+[[- if .IsUserRef]]
+[[- /* user_id is injected from session below, never from form */]]
+[[- else]]
 	m.[[.GoName]] = r.FormValue("[[.Name]]")
+[[- end]]
 [[- else if eq .GoType "string"]]
 	m.[[.GoName]] = r.FormValue("[[.Name]]")
 [[- else if eq .GoType "bool"]]
@@ -115,7 +121,7 @@ func (h *[[.ModelName]]Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 [[- end]]
 [[- end]]
-[[- if and .Protected .HasUserRef]]
+[[- if .HasUserRef]]
 	m.[[.UserRefGoName]] = userID
 [[- end]]
 	created, err := h.service.Create(r.Context(), m)

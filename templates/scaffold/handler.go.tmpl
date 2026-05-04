@@ -75,14 +75,18 @@ func (h *[[.ModelName]][[if .IsBoth]]API[[end]]Handler) create(w http.ResponseWr
 		writeError(w, domain.ErrUnauthorized)
 		return
 	}
+[[- else if .HasUserRef]]
+	userID := domain.GetContextUser(r.Context())
 [[- end]]
 	var m domain.[[.ModelName]]
 	if err := utils.DecodeJSON(r, &m); err != nil {
 		writeError(w, domain.ErrInvalidInput)
 		return
 	}
-[[- if and .Protected .HasUserRef]]
-	m.[[.UserRefGoName]] = userID
+[[- if .HasUserRef]]
+	if userID != "" {
+		m.[[.UserRefGoName]] = userID
+	}
 [[- end]]
 	created, err := h.service.Create(r.Context(), m)
 	if err != nil {

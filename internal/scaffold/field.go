@@ -13,6 +13,7 @@ type Field struct {
 	SQLiteCol string // SQLite column definition
 	PGCol     string // Postgres column definition
 	IsRef     bool
+	IsUserRef bool   // true only for user_id column (literal user:references)
 	RefTable  string // "users"
 	IsTime    bool
 }

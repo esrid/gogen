@@ -71,7 +71,7 @@ func NewData(modelName string, fields []Field, cfg *config.ProjectConfig) *Data 
 		RoutePrefix:       "/" + tableName,
 	}
 
-	for _, f := range fields {
+	for i, f := range fields {
 		if f.IsTime {
 			d.HasTimeImport = true
 		}
@@ -95,6 +95,13 @@ func NewData(modelName string, fields []Field, cfg *config.ProjectConfig) *Data 
 			// Only treat as user ref when the column is literally user_id.
 			// Aliased refs to users (e.g. manager_id → users) are regular refs.
 			isUserRef := f.Name == "user_id"
+			d.Fields[i].IsUserRef = isUserRef
+			if isUserRef {
+				// user_id is context-injected (not user-provided), so allow NULL
+				// for non-protected scaffolds where the caller may be anonymous.
+				d.Fields[i].SQLiteCol = "TEXT REFERENCES users(id) ON DELETE SET NULL"
+				d.Fields[i].PGCol = "UUID REFERENCES users(id) ON DELETE SET NULL"
+			}
 			assoc := RefAssoc{
 				FieldGoName:   f.GoName,
 				FieldName:     f.Name,
@@ -136,7 +143,13 @@ func (d *Data) computeSQL() {
 
 	for i, f := range d.Fields {
 		insertCols = append(insertCols, f.Name)
-		insertArgs = append(insertArgs, "p."+f.GoName)
+		// IsUserRef fields are context-injected and may be empty for anonymous users.
+		// Pass nil when empty so the DB stores NULL (bypassing FK constraint).
+		if f.IsUserRef {
+			insertArgs = append(insertArgs, "nullStr(p."+f.GoName+")")
+		} else {
+			insertArgs = append(insertArgs, "p."+f.GoName)
+		}
 		sqliteInsert = append(sqliteInsert, "?")
 		pgInsert = append(pgInsert, fmt.Sprintf("$%d", i+1))
 

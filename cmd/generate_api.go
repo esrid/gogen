@@ -41,8 +41,8 @@ func runGenerateAPI(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("%s not found in .gogen.yaml — run gogen g scaffold first", modelName)
 	}
 
-	if meta.API {
-		return fmt.Errorf("%s already has an API handler", modelName)
+	if meta.API && !flagForce {
+		return fmt.Errorf("%s already has an API handler (use --force to regenerate)", modelName)
 	}
 
 	fields, err := scaffold.ParseFields(meta.Fields)

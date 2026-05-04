@@ -53,9 +53,19 @@ func NewRouter(h *Handlers, staticHandler http.Handler) http.Handler {
 [[- end]]
 	})
 
+[[- if .Auth]]
+	// LoadUser populates the user in context on public routes (no redirect if missing).
+	r.Group(func(r chi.Router) {
+		r.Use(api.LoadUser(h.SessionService))
+		for _, c := range h.PublicControllers {
+			c.Register(r)
+		}
+	})
+[[- else]]
 	for _, c := range h.PublicControllers {
 		c.Register(r)
 	}
+[[- end]]
 
 [[- if .Auth]]
 	r.Group(func(r chi.Router) {

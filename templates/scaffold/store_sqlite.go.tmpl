@@ -10,7 +10,23 @@ import (
 
 func scan[[.ModelName]](r rowScanner) (domain.[[.ModelName]], error) {
 	var p domain.[[.ModelName]]
+[[- if .HasUserRef]]
+	var [[.UserRefGoName]]Nullable sql.NullString
+	err := r.Scan(
+		&p.ID,
+		[[- range .Fields]]
+		[[- if .IsUserRef]]
+		&[[$.UserRefGoName]]Nullable,
+		[[- else]]
+		&p.[[.GoName]],
+		[[- end]]
+		[[- end]]
+		&p.CreatedAt, &p.UpdatedAt,
+	)
+	p.[[.UserRefGoName]] = [[.UserRefGoName]]Nullable.String
+[[- else]]
 	err := r.Scan([[.ScanArgs]])
+[[- end]]
 	return p, err
 }
 

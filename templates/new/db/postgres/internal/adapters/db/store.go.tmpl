@@ -37,3 +37,10 @@ func NewStore(ctx context.Context, dbURL string) (*Store, error) {
 
 	return &Store{Pool: pool, ConnString: dbURL}, nil
 }
+
+func nullStr(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}

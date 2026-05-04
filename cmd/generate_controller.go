@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/esrid/gogen/internal/config"
+	"github.com/esrid/gogen/internal/generator"
 	"github.com/esrid/gogen/internal/render"
 	"github.com/esrid/gogen/internal/scaffold"
 )
@@ -94,6 +95,9 @@ func runGenerateController(cmd *cobra.Command, args []string) error {
 		}
 		if err := regenerateWireGen(gogenCfg); err != nil {
 			fmt.Printf("  hint    update wire_gen.go manually (%v)\n", err)
+		}
+		if isSSR {
+			generator.RunTemplGenerate(".")
 		}
 	}
 

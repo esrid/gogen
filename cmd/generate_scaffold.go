@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/esrid/gogen/internal/config"
+	"github.com/esrid/gogen/internal/generator"
 	"github.com/esrid/gogen/internal/render"
 	"github.com/esrid/gogen/internal/scaffold"
 )
@@ -81,6 +82,9 @@ func runScaffold(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  warn    could not save scaffold metadata: %v\n", err)
 		}
 		autoWireScaffold(data, gogenCfg)
+		if data.IsSSR() {
+			generator.RunTemplGenerate(".")
+		}
 	}
 
 	fmt.Println("\nDone.")

@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/esrid/gogen/internal/config"
+	"github.com/esrid/gogen/internal/generator"
 	"github.com/esrid/gogen/internal/render"
 	"github.com/esrid/gogen/internal/scaffold"
 )
@@ -130,6 +131,9 @@ func runGenerateAttribute(cmd *cobra.Command, args []string) error {
 		}
 		if err := os.WriteFile(".gogen.yaml", yamlData, 0644); err != nil {
 			return err
+		}
+		if cfg.IsSSR() && regenViews {
+			generator.RunTemplGenerate(".")
 		}
 	}
 

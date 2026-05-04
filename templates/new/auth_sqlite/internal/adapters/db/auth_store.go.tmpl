@@ -92,6 +92,11 @@ func (s *Store) GetUserFromToken(ctx context.Context, token string) (string, *ti
 	return userID, &expiresAt, nil
 }
 
+func (s *Store) DeleteSession(ctx context.Context, token string) error {
+	_, err := s.DB.ExecContext(ctx, `DELETE FROM sessions WHERE token = ?`, token)
+	return err
+}
+
 func (s *Store) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
 	_, err := s.DB.ExecContext(ctx,
 		`UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,

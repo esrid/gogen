@@ -105,7 +105,11 @@ func (h *AuthHandler) showResetPassword(w http.ResponseWriter, r *http.Request) 
 
 func (h *AuthHandler) showSettings(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value(domain.UserContextKey).(string)
-	user, _ := h.userStore.QueryUserByID(r.Context(), userID)
+	user, err := h.userStore.QueryUserByID(r.Context(), userID)
+	if err != nil || user == nil {
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		return
+	}
 [[- if .IsSSR]]
 	web.Render(w, r, auth.Settings(user, r.URL.Query().Get("error"), r.URL.Query().Get("msg")))
 [[- else]]
@@ -276,10 +280,14 @@ func (h *AuthHandler) handleChangePassword(w http.ResponseWriter, r *http.Reques
 
 func (h *AuthHandler) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value(domain.UserContextKey).(string)
+	cookie, _ := r.Cookie("session_token")
 [[- if .IsSSR]]
 	if err := h.userService.DeleteAccount(r.Context(), userID); err != nil {
 		http.Redirect(w, r, "/auth/settings?error=failed", http.StatusSeeOther)
 		return
+	}
+	if cookie != nil {
+		h.sessionService.Delete(r.Context(), cookie.Value)
 	}
 	utils.ClearSessionCookie(w, r, "session_token")
 	http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
@@ -288,12 +296,18 @@ func (h *AuthHandler) handleDeleteAccount(w http.ResponseWriter, r *http.Request
 		utils.WriteJSONError(w, http.StatusInternalServerError, "delete_failed")
 		return
 	}
+	if cookie != nil {
+		h.sessionService.Delete(r.Context(), cookie.Value)
+	}
 	utils.ClearSessionCookie(w, r, "session_token")
 	w.WriteHeader(http.StatusNoContent)
 [[- end]]
 }
 
 func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie("session_token"); err == nil {
+		h.sessionService.Delete(r.Context(), cookie.Value)
+	}
 	utils.ClearSessionCookie(w, r, "session_token")
 [[- if .IsSSR]]
 	http.Redirect(w, r, "/auth/login", http.StatusSeeOther)

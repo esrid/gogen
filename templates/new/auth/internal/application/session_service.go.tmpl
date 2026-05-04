@@ -53,3 +53,8 @@ func (s *SessionService) Validate(ctx context.Context, token string) (string, er
 	s.cache.Store(token, cachedSession{userID: userID, expiresAt: *expiresAt})
 	return userID, nil
 }
+
+func (s *SessionService) Delete(ctx context.Context, token string) error {
+	s.cache.Delete(token)
+	return s.store.DeleteSession(ctx, token)
+}

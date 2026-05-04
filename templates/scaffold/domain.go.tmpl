@@ -18,7 +18,7 @@ type [[.ModelName]] struct {
 
 func (m [[.ModelName]]) Validate() error {
 [[- range .Fields]]
-[[- if .IsRef]]
+[[- if and .IsRef (not .IsUserRef)]]
 	if m.[[.GoName]] == "" {
 		return fmt.Errorf("%w: [[.Name]] is required", ErrInvalidInput)
 	}
