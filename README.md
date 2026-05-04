@@ -19,7 +19,10 @@ Requires Go 1.26+.
 | `gogen generate auth` | `gogen g auth` | Add auth to an existing project |
 | `gogen generate scaffold` | `gogen g s` | Generate full CRUD for a model |
 | `gogen generate attribute` | `gogen g a` | Add fields to an existing scaffold |
+| `gogen generate api` | `gogen g api` | Add JSON API handler to an SSR scaffold |
+| `gogen generate controller` | `gogen g controller` | Generate a simple page/API controller |
 | `gogen destroy scaffold` | `gogen d s` | Remove a generated scaffold |
+| `gogen destroy controller` | `gogen d controller` | Remove a generated controller |
 
 ---
 
@@ -73,46 +76,46 @@ myapp/
 │   └── wire_gen.go                      # Handlers struct + WireHandlers (auto-updated)
 ├── internal/
 │   ├── domain/
-│   │   ├── errors.go                    # ErrNotFound, ErrUnauthorized, etc.
+│   │   ├── errors.go                    # ErrNotFound, ErrConflict, ErrUnauthorized, etc.
 │   │   ├── session_port.go              # SessionStore, SessionService interfaces
-│   │   ├── user.go                      # User struct, context helpers (with --auth)
+│   │   ├── user.go                      # User, NewUser, Validate(), context helpers (with --auth)
 │   │   ├── auth_port.go                 # UserStore, UserService interfaces (with --auth)
-│   │   └── email_port.go               # EmailProvider interface (with --auth)
+│   │   └── email_port.go                # EmailProvider interface (with --auth)
 │   ├── application/
-│   │   ├── auth_service.go             # login/signup/reset logic (with --auth)
-│   │   └── session_service.go          # in-memory session cache (with --auth)
+│   │   ├── auth_service.go              # login/signup/reset logic (with --auth)
+│   │   └── session_service.go           # in-memory session cache (with --auth)
 │   ├── utils/
-│   │   ├── http_utils.go               # WriteJSON, DecodeJSON, cookies
-│   │   └── validation.go               # password hashing (with --auth)
+│   │   ├── http_utils.go                # WriteJSON, DecodeJSON, cookies
+│   │   └── validation.go                # HashPassword, PreHashing (with --auth)
 │   └── adapters/
 │       ├── api/
 │       │   ├── middleware.go            # SecurityHeaders, LimitRequestBody, NoCache
 │       │   ├── middleware_auth.go       # RequireAuth (with --auth)
-│       │   ├── auth_handler.go         # login/signup/reset routes (with --auth)
-│       │   └── response.go             # writeOK, writeCreated, etc. (api/both mode)
+│       │   ├── errors.go                # writeError — maps domain errors to HTTP status codes
+│       │   └── auth_handler.go          # login/signup/reset routes (with --auth)
+│       ├── web/                         # SSR only
+│       │   └── renderer.go              # web.Render, web.RenderError — templ renderer
 │       ├── db/
 │       │   ├── store.go                 # DB connection + pool
 │       │   ├── migrations.go            # goose embed runner
-│       │   ├── auth_store.go           # user/session queries (with --auth)
+│       │   ├── auth_store.go            # user/session queries (with --auth)
 │       │   └── migrations/
 │       │       └── 00001_init.sql
 │       └── external/email/
 │           └── noop.go                  # email provider stub (with --auth)
 └── web/                                 # SSR only
-    ├── renderer.go                      # html/template + go:embed
     ├── static.go
     ├── static/robots.txt
-    └── templates/
-        ├── layout.html
-        ├── components/components.html
-        └── pages/
-            ├── landing.html
-            ├── error.html
-            ├── login.html               # (with --auth)
-            ├── signup.html              # (with --auth)
-            ├── forgot-password.html     # (with --auth)
-            ├── reset-password.html      # (with --auth)
-            └── settings.html            # (with --auth)
+    └── components/
+        ├── components.templ             # shared components (nav, etc.)
+        ├── landing.templ
+        ├── dashboard.templ              # (with --auth)
+        └── auth/                        # (with --auth)
+            ├── login.templ
+            ├── signup.templ
+            ├── forgot_password.templ
+            ├── reset_password.templ
+            └── settings.templ
 ```
 
 **Stack**
@@ -123,7 +126,7 @@ myapp/
 | SQLite | [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) (pure Go, no CGO) |
 | Postgres | [pgx/v5](https://github.com/jackc/pgx) |
 | Migrations | [goose v3](https://github.com/pressly/goose) (embedded SQL) |
-| Templates | custom `html/template` fork with `{{component}}` / `{{slot}}` / `{{fill}}` |
+| Templates | [templ](https://templ.guide) — type-safe Go SSR components |
 | Password | bcrypt with sha256 pre-hashing |
 
 **Docker**
@@ -174,7 +177,7 @@ Must be run from inside a gogen project with `auth: false` in `.gogen.yaml`.
 - Regenerates `main.go`, `bootstrap/router.go`, and `bootstrap/wire_gen.go` to wire auth in
 - Re-wires all existing scaffolds in `wire_gen.go` and `router.go`
 - Creates a new migration (`NNNNN_add_auth.sql`) with the auth tables
-- Adds SSR auth pages if the project uses SSR
+- Adds SSR auth templ components if the project uses SSR
 - Updates `.gogen.yaml` to `auth: true`
 
 **Auth tables created**
@@ -188,15 +191,16 @@ Must be run from inside a gogen project with `auth: false` in `.gogen.yaml`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/auth/login` | Login page (SSR) / — (API) |
+| `GET` | `/auth/login` | Login page (SSR) |
 | `POST` | `/auth/login` | Authenticate |
-| `GET` | `/auth/signup` | Signup page (SSR) / — (API) |
+| `GET` | `/auth/signup` | Signup page (SSR) |
 | `POST` | `/auth/signup` | Register |
 | `POST` | `/auth/logout` | Clear session |
 | `POST` | `/auth/forgot-password` | Request reset link |
 | `POST` | `/auth/reset-password` | Reset with token |
-| `POST` | `/auth/change-password` | Change password (authenticated) |
-| `DELETE` | `/auth/delete-account` | Soft-delete account (authenticated) |
+| `GET` | `/auth/settings` | Settings page (authenticated) |
+| `POST` | `/auth/settings/password` | Change password (authenticated) |
+| `POST` | `/auth/settings/delete` | Delete account (authenticated) |
 
 ---
 
@@ -224,6 +228,21 @@ Must be run from inside a gogen project (reads `.gogen.yaml`). Auto-updates `boo
 
 `references` is convention-based: `post:references` → `post_id` column → FK to `posts(id)`. Table name is auto-pluralized (`category` → `categories`).
 
+When you need two FK columns pointing to the same table, use the aliased form `alias:model:references`:
+
+```sh
+# Two FKs to users: user_id and manager_id both reference users(id)
+gogen g scaffold Employee user:references manager:user:references
+
+# Two FKs to words: word_id and translate_id both reference words(id)
+gogen g scaffold WordAssociation word:references translate:word:references
+```
+
+- `manager:user:references` → column `manager_id`, FK to `users(id)`, route `/by-manager/{managerID}`
+- `translate:word:references` → column `translate_id`, FK to `words(id)`, route `/by-translate/{translateID}`
+
+Aliased refs to `users` are treated as regular (non-auth-scoped) refs. Only the literal `user:references` (column `user_id`) triggers auth scoping with `--protected`.
+
 Go field names follow standard acronym rules: `user_id` → `UserID`, `avatar_url` → `AvatarURL`.
 
 **Example**
@@ -243,20 +262,35 @@ internal/adapters/api/post_handler.go
 internal/adapters/db/migrations/NNNNN_create_posts.sql
 ```
 
-With `--render ssr` or `--render both`, four HTML pages are also created:
+With `--render ssr` or `--render both`, a templ component folder is also created:
 
 ```
-web/templates/pages/posts_index.html
-web/templates/pages/posts_show.html
-web/templates/pages/posts_new.html
-web/templates/pages/posts_edit.html
+web/components/posts/
+├── index.templ
+├── show.templ
+├── new.templ
+└── edit.templ
 ```
 
-With `--render both`, an additional API handler is generated:
+With `--render both`, an SSR web handler and API handler are both generated:
 
 ```
-internal/adapters/web/post_handler.go   # SSR handler (GET /posts → HTML)
-internal/adapters/api/post_api_handler.go  # API handler (GET /api/posts → JSON)
+internal/adapters/web/post_handler.go      # SSR handler (GET /posts → HTML)
+internal/adapters/api/post_handler.go      # API handler (GET /api/posts → JSON)
+```
+
+**Validation**
+
+Generated domain structs include a `Validate()` method that checks required string/reference fields. The service layer calls it automatically on create and update — no validation logic leaks into handlers or utils.
+
+```go
+// internal/domain/post.go
+func (m Post) Validate() error {
+    if strings.TrimSpace(m.Title) == "" {
+        return fmt.Errorf("%w: title is required", ErrInvalidInput)
+    }
+    return nil
+}
 ```
 
 **HTTP endpoints**
@@ -312,20 +346,19 @@ After generation, `bootstrap/wire_gen.go` and `bootstrap/router.go` are updated 
 ```go
 // bootstrap/wire_gen.go (auto-generated)
 type Handlers struct {
-    Store *db.Store
-    Post  *api.PostHandler
+    Post *api.PostHandler
 }
 
 func WireHandlers(dbStore *db.Store, logger *slog.Logger) *Handlers {
-    h := &Handlers{Store: dbStore}
+    h := &Handlers{}
     postSvc := application.NewPostService(dbStore)
-    h.Post = api.NewPostHandler(postSvc)
+    h.Post = api.NewPostHandler(postSvc, logger)
     return h
 }
 
 // bootstrap/router.go (mount injected automatically)
 if h.Post != nil {
-    r.Mount("/posts", h.Post.Route())
+    h.Post.Register(r)
 }
 ```
 
@@ -333,7 +366,7 @@ if h.Post != nil {
 
 ## gogen generate attribute
 
-Add new fields to an existing scaffold. Updates the domain, store, and handler; creates an `ALTER TABLE` migration; and regenerates SSR pages if applicable.
+Add new fields to an existing scaffold. Updates the domain, store, and handler; creates an `ALTER TABLE` migration; and regenerates SSR templ components if applicable.
 
 ```sh
 gogen g attribute <ModelName> field:type [field:type ...]
@@ -350,10 +383,76 @@ gogen g attribute Post published:bool views:int
 What it does:
 - Creates `NNNNN_add_published_views_to_posts.sql` with `ALTER TABLE` statements
 - Regenerates `post.go`, `post_store.go`, `post_handler.go` with the new fields
-- Regenerates SSR pages (`posts_*.html`) if the project uses SSR
+- Regenerates SSR templ components (`web/components/posts/*.templ`) only when `--views` is passed
 - Updates `.gogen.yaml` with the new field list
 
 Accepts the same field types as `gogen g scaffold`. Duplicate fields are rejected.
+
+> SSR views are not regenerated by default to preserve any customisations you've made. Pass `--views` to overwrite them.
+
+---
+
+## gogen generate api
+
+Add a JSON API handler to an existing SSR scaffold. Useful when you want to expose a REST API alongside your server-rendered pages.
+
+```sh
+gogen g api <ModelName>
+```
+
+Must be run from inside a gogen project with `render: ssr`. The scaffold must already exist.
+
+**Example**
+
+```sh
+gogen g api Post
+# generates: internal/adapters/api/post_api_handler.go
+# routes:    GET /api/posts, POST /api/posts, GET /api/posts/{id}, etc.
+```
+
+Updates `.gogen.yaml` and rewires `bootstrap/wire_gen.go` and `bootstrap/router.go` automatically.
+
+---
+
+## gogen generate controller
+
+Generate a simple page or API controller with no model, store, or service — useful for static-ish pages like contact, about, terms, etc.
+
+```sh
+gogen g controller <Name> [--protected] [--route /path]
+```
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--protected` | Mount behind `RequireAuth` middleware |
+| `--route` | Custom route path (default: `/<name>`) |
+
+**Examples**
+
+```sh
+gogen g controller Contact
+# GET /contact → web/components/contact/page.templ
+
+gogen g controller Dashboard --protected --route /dashboard
+# GET /dashboard → protected, web/components/dashboard/page.templ
+```
+
+**Generated files (SSR)**
+
+```
+internal/adapters/web/contact_handler.go
+web/components/contact/page.templ
+```
+
+**Generated files (API)**
+
+```
+internal/adapters/api/contact_handler.go
+```
+
+Auto-wired into `bootstrap/wire_gen.go` and `bootstrap/router.go`.
 
 ---
 
@@ -379,9 +478,9 @@ internal/domain/post_port.go
 internal/application/post_service.go
 internal/adapters/db/post_store.go
 internal/adapters/api/post_handler.go
-internal/adapters/api/post_api_handler.go   # both mode only
-internal/adapters/web/post_handler.go       # ssr/both mode only
-web/templates/pages/posts_*.html            # SSR only
+internal/adapters/api/post_api_handler.go   # both/api mode
+internal/adapters/web/post_handler.go       # ssr/both mode
+web/components/posts/                        # SSR only
 internal/adapters/db/migrations/*_create_posts.sql
 ```
 
@@ -404,41 +503,97 @@ gogen d scaffold Post
 
 ---
 
+## gogen destroy controller
+
+Remove all files generated by `gogen g controller`. Updates `bootstrap/wire_gen.go` and `bootstrap/router.go` automatically.
+
+```sh
+gogen d controller <Name>
+```
+
+**Example**
+
+```sh
+gogen d controller Contact
+```
+
+Removes:
+
+```
+internal/adapters/web/contact_handler.go   # SSR
+internal/adapters/api/contact_handler.go   # API
+web/components/contact/                    # SSR
+```
+
+---
+
 ## Templates (SSR)
 
-Generated projects use a custom `html/template` fork with a component system.
+Generated projects use [templ](https://templ.guide) — a type-safe Go templating language that compiles to plain Go functions.
 
-**Define a component** (`templates/components/card.html`):
-```html
-{{define "card"}}
-<div class="card">
-  <h2>{{slot "title"}}Untitled{{end}}</h2>
-  <p>{{slot "body"}}{{end}}</p>
-</div>
-{{end}}
+**Define a component** (`web/components/card/card.templ`):
+```go
+package card
+
+templ Card(title, body string) {
+    <div class="card">
+        <h2>{ title }</h2>
+        <p>{ body }</p>
+    </div>
+}
 ```
 
-**Use a component** (any page or partial):
-```html
-{{component "card"}}
-  {{fill "title"}}Hello{{end}}
-  {{fill "body"}}World{{end}}
-{{end}}
+**Use it in a page** (`web/components/posts/index.templ`):
+```go
+package posts
+
+import "myapp/web/layouts"
+import "myapp/web/components/card"
+
+templ Index(posts []domain.Post) {
+    @layouts.Layout("Posts") {
+        for _, p := range posts {
+            @card.Card(p.Title, p.Body)
+        }
+    }
+}
 ```
 
-**Layout** (`templates/layout.html`) uses slots for `title`, `nav`, `content`, `head`, `scripts`.
-
-**Pages** wrap themselves in the layout:
-```html
-{{component "layout"}}
-  {{fill "title"}}My Page{{end}}
-  {{fill "content"}}
-    <h1>Hello</h1>
-  {{end}}
-{{end}}
+**Render from a handler**:
+```go
+web.Render(w, r, posts.Index(items))
 ```
 
-`web.Render(w, "page.html", data)` executes a page by its filename.
+**Error rendering**:
+```go
+web.RenderError(w, r, err)   // maps domain errors to HTTP status + error page
+```
+
+`web.RenderError` maps domain errors to the correct HTTP status automatically:
+
+| Domain error | HTTP status |
+|---|---|
+| `ErrNotFound` | 404 |
+| `ErrUnauthorized` | 401 |
+| `ErrForbidden` | 403 |
+| `ErrConflict` | 409 |
+| anything else | 500 |
+
+---
+
+## Error handling
+
+Domain errors are defined in `internal/domain/errors.go` and mapped to HTTP status codes only at the adapter layer — never inside domain or application code.
+
+**API adapter** (`internal/adapters/api/errors.go`):
+```go
+writeError(w, err)   // maps domain errors to JSON error responses
+```
+
+**SSR adapter** (`internal/adapters/web/renderer.go`):
+```go
+web.RenderError(w, r, err)   // maps domain errors to HTML error pages
+```
 
 ---
 

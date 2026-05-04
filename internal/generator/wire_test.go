@@ -79,7 +79,7 @@ func TestWireGenContent_NoAuth_OneScaffold_API(t *testing.T) {
 
 	assertContains(t, out, "Post *api.PostHandler")
 	assertContains(t, out, "postSvc := application.NewPostService(dbStore)")
-	assertContains(t, out, "h.Post = api.NewPostHandler(postSvc)")
+	assertContains(t, out, "h.Post = api.NewPostHandler(postSvc, logger)")
 	assertContains(t, out, "h.PublicControllers = append(h.PublicControllers, h.Post)")
 	assertNotContains(t, out, "ProtectedControllers = append(h.ProtectedControllers, h.Post)")
 	assertNotContains(t, out, "AuthHandler")
@@ -115,7 +115,7 @@ func TestWireGenContent_Auth_OneScaffold_BothMode(t *testing.T) {
 	assertContains(t, out, "Post *web.PostHandler")
 	// "both" mode also adds an API handler
 	assertContains(t, out, "PostAPI *api.PostAPIHandler")
-	assertContains(t, out, "h.PostAPI = api.NewPostAPIHandler(postSvc)")
+	assertContains(t, out, "h.PostAPI = api.NewPostAPIHandler(postSvc, logger)")
 }
 
 // --------------------------------------------------------------------------
@@ -162,7 +162,7 @@ func TestWireGenContent_NoAuth_OneScaffold_SSRMode(t *testing.T) {
 	out := string(WireGenContent(c))
 
 	assertContains(t, out, "Post *web.PostHandler")
-	assertContains(t, out, "h.Post = web.NewPostHandler(postSvc)")
+	assertContains(t, out, "h.Post = web.NewPostHandler(postSvc, logger)")
 	assertNotContains(t, out, "*api.PostHandler")
 	// web import should be present
 	assertContains(t, out, "internal/adapters/web")

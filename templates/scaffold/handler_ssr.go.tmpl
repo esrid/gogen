@@ -1,6 +1,7 @@
 package web
 
 import (
+	"log/slog"
 	"net/http"
 [[- if .NeedsStrconv]]
 	"strconv"
@@ -18,10 +19,11 @@ import (
 
 type [[.ModelName]]Handler struct {
 	service domain.[[.ModelName]]Service
+	logger  *slog.Logger
 }
 
-func New[[.ModelName]]Handler(service domain.[[.ModelName]]Service) *[[.ModelName]]Handler {
-	return &[[.ModelName]]Handler{service: service}
+func New[[.ModelName]]Handler(service domain.[[.ModelName]]Service, logger *slog.Logger) *[[.ModelName]]Handler {
+	return &[[.ModelName]]Handler{service: service, logger: logger}
 }
 
 func (h *[[.ModelName]]Handler) Register(r chi.Router) {
@@ -57,7 +59,8 @@ func (h *[[.ModelName]]Handler) index(w http.ResponseWriter, r *http.Request) {
 	items, err := h.service.List(r.Context())
 [[- end]]
 	if err != nil {
-		web.Render(w, r, web.Error(err.Error()))
+		h.logger.Error("list [[.ModelNameLC]]s", "error", err)
+		web.RenderError(w, r, err)
 		return
 	}
 	web.Render(w, r, [[.ModelNameLC]].Index(items))
@@ -67,7 +70,8 @@ func (h *[[.ModelName]]Handler) show(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	item, err := h.service.Get(r.Context(), id)
 	if err != nil {
-		web.Render(w, r, web.Error(err.Error()))
+		h.logger.Error("get [[.ModelNameLC]]", "id", id, "error", err)
+		web.RenderError(w, r, err)
 		return
 	}
 	web.Render(w, r, [[.ModelNameLC]].Show(item))
@@ -86,7 +90,7 @@ func (h *[[.ModelName]]Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 [[- end]]
 	if err := r.ParseForm(); err != nil {
-		web.Render(w, r, web.Error(err.Error()))
+		web.RenderError(w, r, err)
 		return
 	}
 	var m domain.[[.ModelName]]
@@ -116,7 +120,8 @@ func (h *[[.ModelName]]Handler) create(w http.ResponseWriter, r *http.Request) {
 [[- end]]
 	created, err := h.service.Create(r.Context(), m)
 	if err != nil {
-		web.Render(w, r, web.Error(err.Error()))
+		h.logger.Error("create [[.ModelNameLC]]", "error", err)
+		web.RenderError(w, r, err)
 		return
 	}
 	http.Redirect(w, r, "[[.RoutePrefix]]/"+created.ID, http.StatusSeeOther)
@@ -126,7 +131,8 @@ func (h *[[.ModelName]]Handler) editForm(w http.ResponseWriter, r *http.Request)
 	id := chi.URLParam(r, "id")
 	item, err := h.service.Get(r.Context(), id)
 	if err != nil {
-		web.Render(w, r, web.Error(err.Error()))
+		h.logger.Error("get [[.ModelNameLC]] for edit", "id", id, "error", err)
+		web.RenderError(w, r, err)
 		return
 	}
 	web.Render(w, r, [[.ModelNameLC]].Edit(item))
@@ -134,12 +140,17 @@ func (h *[[.ModelName]]Handler) editForm(w http.ResponseWriter, r *http.Request)
 
 func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := r.ParseForm(); err != nil {
-		web.Render(w, r, web.Error(err.Error()))
+	// Fetch first so ref fields (not in form) are preserved.
+	m, err := h.service.Get(r.Context(), id)
+	if err != nil {
+		h.logger.Error("update [[.ModelNameLC]]", "id", id, "error", err)
+		web.RenderError(w, r, err)
 		return
 	}
-	var m domain.[[.ModelName]]
-	m.ID = id
+	if err := r.ParseForm(); err != nil {
+		web.RenderError(w, r, err)
+		return
+	}
 [[- range .Fields]]
 [[- if .IsRef]]
 [[- else if eq .GoType "string"]]
@@ -160,8 +171,9 @@ func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
 	}
 [[- end]]
 [[- end]]
-	if err := h.service.Update(r.Context(), m); err != nil {
-		web.Render(w, r, web.Error(err.Error()))
+	if err := h.service.Update(r.Context(), *m); err != nil {
+		h.logger.Error("update [[.ModelNameLC]]", "id", id, "error", err)
+		web.RenderError(w, r, err)
 		return
 	}
 	http.Redirect(w, r, "[[.RoutePrefix]]/"+id, http.StatusSeeOther)
@@ -170,7 +182,8 @@ func (h *[[.ModelName]]Handler) update(w http.ResponseWriter, r *http.Request) {
 func (h *[[.ModelName]]Handler) delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.service.Delete(r.Context(), id); err != nil {
-		web.Render(w, r, web.Error(err.Error()))
+		h.logger.Error("delete [[.ModelNameLC]]", "id", id, "error", err)
+		web.RenderError(w, r, err)
 		return
 	}
 	http.Redirect(w, r, "[[.RoutePrefix]]", http.StatusSeeOther)
@@ -180,7 +193,7 @@ func (h *[[$.ModelName]]Handler) listBy[[.RefModel]](w http.ResponseWriter, r *h
 	[[.ParamName]] := chi.URLParam(r, "[[.ParamName]]")
 	items, err := h.service.[[.ServiceMethod]](r.Context(), [[.ParamName]])
 	if err != nil {
-		web.Render(w, r, web.Error(err.Error()))
+		web.RenderError(w, r, err)
 		return
 	}
 	web.Render(w, r, [[$.ModelNameLC]].Index(items))

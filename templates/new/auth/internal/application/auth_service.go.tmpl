@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"time"
 
 	"[[.ModulePath]]/internal/domain"
@@ -46,6 +45,9 @@ func (s *AuthService) Login(ctx context.Context, email, password, timezone strin
 }
 
 func (s *AuthService) Signup(ctx context.Context, u *domain.NewUser) (string, string, error) {
+	if err := u.Validate(); err != nil {
+		return "", "", err
+	}
 	hashed, err := utils.HashPassword(u.Password)
 	if err != nil {
 		return "", "", err
@@ -83,6 +85,9 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID, oldPassword, n
 		return domain.ErrInvalidCredentials
 	}
 
+	if err := domain.ValidatePassword(newPassword); err != nil {
+		return err
+	}
 	hashed, err := utils.HashPassword(newPassword)
 	if err != nil {
 		return err
@@ -119,9 +124,12 @@ func (s *AuthService) ForgotPassword(ctx context.Context, emailAddr, ipAddress s
 }
 
 func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
+	if err := domain.ValidatePassword(newPassword); err != nil {
+		return err
+	}
 	hashed, err := utils.HashPassword(newPassword)
 	if err != nil {
-		return errors.New("failed to hash password")
+		return err
 	}
 	return s.store.ResetPassword(ctx, token, hashed)
 }

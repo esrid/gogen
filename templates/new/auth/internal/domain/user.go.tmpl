@@ -1,6 +1,11 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"net/mail"
+	"strings"
+)
 
 type User struct {
 	ID           string
@@ -16,6 +21,39 @@ type NewUser struct {
 	Password string
 	Repeat   string
 	Timezone string
+}
+
+func (u *NewUser) Validate() error {
+	u.Email = strings.ToLower(strings.TrimSpace(u.Email))
+	if u.Email == "" {
+		return fmt.Errorf("%w: email is required", ErrInvalidInput)
+	}
+	if _, err := mail.ParseAddress(u.Email); err != nil {
+		return fmt.Errorf("%w: invalid email format", ErrInvalidInput)
+	}
+	if u.Password == "" {
+		return fmt.Errorf("%w: password is required", ErrInvalidInput)
+	}
+	if u.Password != u.Repeat {
+		return fmt.Errorf("%w: passwords do not match", ErrInvalidInput)
+	}
+	if len(u.Password) < 8 {
+		return fmt.Errorf("%w: password too short", ErrInvalidInput)
+	}
+	if len(u.Password) > 72 {
+		return fmt.Errorf("%w: password too long", ErrInvalidInput)
+	}
+	return nil
+}
+
+func ValidatePassword(password string) error {
+	if len(password) < 8 {
+		return fmt.Errorf("%w: password too short", ErrInvalidInput)
+	}
+	if len(password) > 72 {
+		return fmt.Errorf("%w: password too long", ErrInvalidInput)
+	}
+	return nil
 }
 
 type contextKey string

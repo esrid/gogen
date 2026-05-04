@@ -65,7 +65,7 @@ func runGenerateAuth(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("update .gogen.yaml: %w", err)
 		}
 		reWireAllScaffolds(gogenCfg)
-		return generator.PostProcess(".")
+		return generator.PostProcess(".", cfg.IsSSR())
 	}
 
 	fmt.Println("\nDry run complete. No files written.")
@@ -118,6 +118,12 @@ func authFileSpecs(cfg *config.ProjectConfig) (infra, new []generator.FileSpec) 
 		generator.S("new/base/internal/domain/errors.go.tmpl", "internal/domain/errors.go"),
 	}
 
+	if cfg.IsSSR() {
+		infra = append(infra,
+			generator.S("new/ssr/web/renderer.go.tmpl", "web/renderer.go"),
+		)
+	}
+
 	new = []generator.FileSpec{
 		generator.S("new/auth/internal/domain/user.go.tmpl", "internal/domain/user.go"),
 		generator.S("new/auth/internal/domain/auth_port.go.tmpl", "internal/domain/auth_port.go"),
@@ -138,11 +144,12 @@ func authFileSpecs(cfg *config.ProjectConfig) (infra, new []generator.FileSpec) 
 
 	if cfg.IsSSR() {
 		new = append(new,
-			generator.S("new/ssr_auth/web/templates/pages/login.html", "web/templates/pages/login.html"),
-			generator.S("new/ssr_auth/web/templates/pages/signup.html", "web/templates/pages/signup.html"),
-			generator.S("new/ssr_auth/web/templates/pages/forgot-password.html", "web/templates/pages/forgot-password.html"),
-			generator.S("new/ssr_auth/web/templates/pages/reset-password.html", "web/templates/pages/reset-password.html"),
-			generator.S("new/ssr_auth/web/templates/pages/settings.html", "web/templates/pages/settings.html"),
+			generator.S("new/ssr_auth/web/components/auth/login.templ.tmpl", "web/components/auth/login.templ"),
+			generator.S("new/ssr_auth/web/components/auth/signup.templ.tmpl", "web/components/auth/signup.templ"),
+			generator.S("new/ssr_auth/web/components/auth/forgot-password.templ.tmpl", "web/components/auth/forgot-password.templ"),
+			generator.S("new/ssr_auth/web/components/auth/reset-password.templ.tmpl", "web/components/auth/reset-password.templ"),
+			generator.S("new/ssr_auth/web/components/auth/settings.templ.tmpl", "web/components/auth/settings.templ"),
+			generator.S("new/ssr/web/components/dashboard.templ.tmpl", "web/components/dashboard.templ"),
 		)
 	}
 

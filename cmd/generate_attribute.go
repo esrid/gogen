@@ -25,9 +25,10 @@ var attributeCmd = &cobra.Command{
 
 func init() {
 	generateCmd.AddCommand(attributeCmd)
+	attributeCmd.Flags().Bool("views", false, "Also regenerate templ view files (overwrites customizations)")
 }
 
-func runGenerateAttribute(_ *cobra.Command, args []string) error {
+func runGenerateAttribute(cmd *cobra.Command, args []string) error {
 	modelName := scaffold.ToCamel(args[0])
 	newFieldArgs := args[1:]
 
@@ -104,13 +105,13 @@ func runGenerateAttribute(_ *cobra.Command, args []string) error {
 		regenSpecs = append(regenSpecs, scaffoldSpec{"scaffold/handler.go.tmpl", "internal/adapters/api/" + n + "_handler.go"})
 	}
 
-	if cfg.IsSSR() {
-		t := data.TableName
+	regenViews, _ := cmd.Flags().GetBool("views")
+	if cfg.IsSSR() && regenViews {
 		regenSpecs = append(regenSpecs,
-			scaffoldSpec{"scaffold/pages/index.html.tmpl", "web/templates/pages/" + t + "_index.html"},
-			scaffoldSpec{"scaffold/pages/show.html.tmpl", "web/templates/pages/" + t + "_show.html"},
-			scaffoldSpec{"scaffold/pages/new.html.tmpl", "web/templates/pages/" + t + "_new.html"},
-			scaffoldSpec{"scaffold/pages/edit.html.tmpl", "web/templates/pages/" + t + "_edit.html"},
+			scaffoldSpec{"scaffold/components/index.templ.tmpl", "web/components/" + n + "/index.templ"},
+			scaffoldSpec{"scaffold/components/show.templ.tmpl", "web/components/" + n + "/show.templ"},
+			scaffoldSpec{"scaffold/components/new.templ.tmpl", "web/components/" + n + "/new.templ"},
+			scaffoldSpec{"scaffold/components/edit.templ.tmpl", "web/components/" + n + "/edit.templ"},
 		)
 	}
 

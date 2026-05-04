@@ -78,6 +78,26 @@ func TestParseFields_ReferencesRefTable(t *testing.T) {
 	}
 }
 
+func TestParseFields_AliasedReference(t *testing.T) {
+	fields, err := ParseFields([]string{"manager:user:references"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	f := fields[0]
+	if f.Name != "manager_id" {
+		t.Errorf("Name: want manager_id, got %q", f.Name)
+	}
+	if f.GoName != "ManagerID" {
+		t.Errorf("GoName: want ManagerID, got %q", f.GoName)
+	}
+	if f.RefTable != "users" {
+		t.Errorf("RefTable: want users, got %q", f.RefTable)
+	}
+	if !f.IsRef {
+		t.Error("IsRef should be true")
+	}
+}
+
 func TestParseFields_Errors(t *testing.T) {
 	cases := []struct {
 		input string
@@ -86,6 +106,8 @@ func TestParseFields_Errors(t *testing.T) {
 		{"title", "missing colon"},
 		{"title:widget", "unknown type"},
 		{"", "empty string"},
+		{"a:b:string", "3-part non-references"},
+		{"a:b:c:references", "4-part"},
 	}
 
 	for _, tc := range cases {
@@ -196,6 +218,84 @@ func TestNewData_WithNonUserRef(t *testing.T) {
 	}
 	if ref.ParamName != "categoryID" {
 		t.Errorf("ParamName: want categoryID, got %q", ref.ParamName)
+	}
+}
+
+// --------------------------------------------------------------------------
+// NewData — aliased reference (manager:user:references)
+// --------------------------------------------------------------------------
+
+func TestNewData_AliasedUserRef(t *testing.T) {
+	fields, err := ParseFields([]string{"manager:user:references"})
+	if err != nil {
+		t.Fatalf("ParseFields: %v", err)
+	}
+	d := NewData("Employee", fields, baseCfg())
+
+	// aliased user ref is NOT treated as the primary user ref
+	if d.HasUserRef {
+		t.Error("HasUserRef should be false for aliased user ref (manager_id)")
+	}
+	if !d.HasNonUserRefs {
+		t.Error("HasNonUserRefs should be true")
+	}
+
+	if len(d.Refs) != 1 {
+		t.Fatalf("Refs length: want 1, got %d", len(d.Refs))
+	}
+	ref := d.Refs[0]
+
+	if ref.RefModel != "User" {
+		t.Errorf("RefModel: want User, got %q", ref.RefModel)
+	}
+	if ref.RefTable != "users" {
+		t.Errorf("RefTable: want users, got %q", ref.RefTable)
+	}
+	// method names derived from alias, not ref model
+	if ref.StoreMethod != "ListEmployeesByManagerID" {
+		t.Errorf("StoreMethod: want ListEmployeesByManagerID, got %q", ref.StoreMethod)
+	}
+	if ref.ServiceMethod != "ListByManagerID" {
+		t.Errorf("ServiceMethod: want ListByManagerID, got %q", ref.ServiceMethod)
+	}
+	if ref.ParamName != "managerID" {
+		t.Errorf("ParamName: want managerID, got %q", ref.ParamName)
+	}
+	if ref.URLSegment != "manager" {
+		t.Errorf("URLSegment: want manager, got %q", ref.URLSegment)
+	}
+	if ref.IsUserRef {
+		t.Error("IsUserRef should be false for aliased ref")
+	}
+}
+
+func TestNewData_TwoRefsToSameTable(t *testing.T) {
+	// word_association: word:references + translate:word:references
+	// both point to "words" but with different columns — no method collision
+	fields, err := ParseFields([]string{"word:references", "translate:word:references"})
+	if err != nil {
+		t.Fatalf("ParseFields: %v", err)
+	}
+	d := NewData("WordAssociation", fields, baseCfg())
+
+	if len(d.Refs) != 2 {
+		t.Fatalf("Refs length: want 2, got %d", len(d.Refs))
+	}
+
+	r0, r1 := d.Refs[0], d.Refs[1]
+
+	if r0.StoreMethod == r1.StoreMethod {
+		t.Errorf("StoreMethod collision: both are %q", r0.StoreMethod)
+	}
+	if r0.ServiceMethod == r1.ServiceMethod {
+		t.Errorf("ServiceMethod collision: both are %q", r0.ServiceMethod)
+	}
+
+	if r0.StoreMethod != "ListWordAssociationsByWordID" {
+		t.Errorf("r0.StoreMethod: want ListWordAssociationsByWordID, got %q", r0.StoreMethod)
+	}
+	if r1.StoreMethod != "ListWordAssociationsByTranslateID" {
+		t.Errorf("r1.StoreMethod: want ListWordAssociationsByTranslateID, got %q", r1.StoreMethod)
 	}
 }
 

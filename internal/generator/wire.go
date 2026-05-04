@@ -16,9 +16,27 @@ func WireGenContent(cfg *config.GogenYAML) []byte {
 	}
 	sort.Strings(names)
 
+	ctrlNames := make([]string, 0, len(cfg.Controllers))
+	for name := range cfg.Controllers {
+		ctrlNames = append(ctrlNames, name)
+	}
+	sort.Strings(ctrlNames)
+
 	hasScaffolds := len(names) > 0
+	hasControllers := len(ctrlNames) > 0
 	isSSR := cfg.RenderMode == "ssr" || cfg.RenderMode == "both"
-	needsWeb := isSSR && hasScaffolds
+	needsWeb := isSSR && (hasScaffolds || hasControllers)
+	needsAPIForSSR := func() bool {
+		if cfg.RenderMode != "ssr" {
+			return false
+		}
+		for _, m := range cfg.Scaffolds {
+			if m.API {
+				return true
+			}
+		}
+		return false
+	}()
 
 	var b strings.Builder
 	b.WriteString("package bootstrap\n\n")
@@ -40,19 +58,26 @@ func WireGenContent(cfg *config.GogenYAML) []byte {
 	b.WriteString(")\n\n")
 
 	b.WriteString("type Handlers struct {\n")
-	b.WriteString("\tStore *db.Store\n")
 	if cfg.Auth {
 		b.WriteString("\tAuth           *api.AuthHandler\n")
 		b.WriteString("\tSessionService domain.SessionService\n")
 	}
 	for _, name := range names {
+		meta := cfg.Scaffolds[name]
 		if isSSR {
 			b.WriteString("\t" + name + " *web." + name + "Handler\n")
 		} else {
 			b.WriteString("\t" + name + " *api." + name + "Handler\n")
 		}
-		if cfg.RenderMode == "both" {
+		if cfg.RenderMode == "both" || (needsAPIForSSR && meta.API) {
 			b.WriteString("\t" + name + "API *api." + name + "APIHandler\n")
+		}
+	}
+	for _, name := range ctrlNames {
+		if isSSR {
+			b.WriteString("\t" + name + " *web." + name + "Handler\n")
+		} else {
+			b.WriteString("\t" + name + " *api." + name + "Handler\n")
 		}
 	}
 	b.WriteString("\n")
@@ -61,7 +86,7 @@ func WireGenContent(cfg *config.GogenYAML) []byte {
 	b.WriteString("}\n\n")
 
 	b.WriteString("func WireHandlers(dbStore *db.Store, logger *slog.Logger) *Handlers {\n")
-	b.WriteString("\th := &Handlers{Store: dbStore}\n")
+	b.WriteString("\th := &Handlers{}\n")
 	if cfg.Auth {
 		b.WriteString("\n")
 		b.WriteString("\temailProvider := email.NewNoopProvider()\n")
@@ -78,9 +103,9 @@ func WireGenContent(cfg *config.GogenYAML) []byte {
 		b.WriteString("\n")
 		b.WriteString("\t" + n + "Svc := application.New" + name + "Service(dbStore)\n")
 		if isSSR {
-			b.WriteString("\th." + name + " = web.New" + name + "Handler(" + n + "Svc)\n")
+			b.WriteString("\th." + name + " = web.New" + name + "Handler(" + n + "Svc, logger)\n")
 		} else {
-			b.WriteString("\th." + name + " = api.New" + name + "Handler(" + n + "Svc)\n")
+			b.WriteString("\th." + name + " = api.New" + name + "Handler(" + n + "Svc, logger)\n")
 		}
 
 		if meta.Protected {
@@ -89,8 +114,8 @@ func WireGenContent(cfg *config.GogenYAML) []byte {
 			b.WriteString("\th.PublicControllers = append(h.PublicControllers, h." + name + ")\n")
 		}
 
-		if cfg.RenderMode == "both" {
-			b.WriteString("\th." + name + "API = api.New" + name + "APIHandler(" + n + "Svc)\n")
+		if cfg.RenderMode == "both" || (needsAPIForSSR && meta.API) {
+			b.WriteString("\th." + name + "API = api.New" + name + "APIHandler(" + n + "Svc, logger)\n")
 			if meta.Protected {
 				b.WriteString("\th.ProtectedControllers = append(h.ProtectedControllers, h." + name + "API)\n")
 			} else {
@@ -98,6 +123,21 @@ func WireGenContent(cfg *config.GogenYAML) []byte {
 			}
 		}
 	}
+	for _, name := range ctrlNames {
+		meta := cfg.Controllers[name]
+		b.WriteString("\n")
+		if isSSR {
+			b.WriteString("\th." + name + " = web.New" + name + "Handler()\n")
+		} else {
+			b.WriteString("\th." + name + " = api.New" + name + "Handler()\n")
+		}
+		if meta.Protected {
+			b.WriteString("\th.ProtectedControllers = append(h.ProtectedControllers, h." + name + ")\n")
+		} else {
+			b.WriteString("\th.PublicControllers = append(h.PublicControllers, h." + name + ")\n")
+		}
+	}
+
 	b.WriteString("\n\treturn h\n")
 	b.WriteString("}\n")
 

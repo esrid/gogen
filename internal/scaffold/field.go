@@ -30,12 +30,17 @@ func ParseFields(args []string) ([]Field, error) {
 }
 
 func parseField(arg string) (Field, error) {
-	parts := strings.SplitN(arg, ":", 2)
-	if len(parts) != 2 {
-		return Field{}, fmt.Errorf("invalid field %q: use name:type", arg)
+	parts := strings.Split(arg, ":")
+	if len(parts) < 2 || len(parts) > 3 {
+		return Field{}, fmt.Errorf("invalid field %q: use name:type or name:model:references", arg)
 	}
+
 	name := strings.ToLower(parts[0])
-	typ := strings.ToLower(parts[1])
+	typ := strings.ToLower(parts[len(parts)-1])
+
+	if len(parts) == 3 && typ != "references" {
+		return Field{}, fmt.Errorf("invalid field %q: 3-part syntax only valid for references (name:model:references)", arg)
+	}
 
 	f := Field{
 		Name:    name,
@@ -70,7 +75,15 @@ func parseField(arg string) (Field, error) {
 		f.SQLiteCol = "TEXT NOT NULL DEFAULT ''"
 		f.PGCol = "UUID NOT NULL DEFAULT gen_random_uuid()"
 	case "references":
-		refTable := Pluralize(name)
+		// 2-part: word:references → column word_id → table words
+		// 3-part: manager:user:references → column manager_id → table users
+		var refModelName string
+		if len(parts) == 3 {
+			refModelName = strings.ToLower(parts[1])
+		} else {
+			refModelName = name
+		}
+		refTable := Pluralize(refModelName)
 		f.Name = name + "_id"
 		f.GoName = ToCamel(name + "_id")
 		f.JSONTag = name + "_id"

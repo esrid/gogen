@@ -77,7 +77,7 @@ func (g *Generator) GenerateProject(cfg *config.ProjectConfig) error {
 		return nil
 	}
 
-	return PostProcess(outDir)
+	return PostProcess(outDir, cfg.IsSSR())
 }
 
 func writeFile(path string, content []byte) error {
@@ -112,6 +112,7 @@ func fileSpecs(cfg *config.ProjectConfig) []FileSpec {
 		s("new/base/bootstrap/wire_gen.go.tmpl", "bootstrap/wire_gen.go"),
 		s("new/base/internal/adapters/api/controller.go.tmpl", "internal/adapters/api/controller.go"),
 		s("new/base/internal/adapters/api/middleware.go.tmpl", "internal/adapters/api/middleware.go"),
+		s("new/base/internal/adapters/api/errors.go.tmpl", "internal/adapters/api/errors.go"),
 		s("new/base/internal/domain/errors.go.tmpl", "internal/domain/errors.go"),
 		s("new/base/internal/domain/session_port.go.tmpl", "internal/domain/session_port.go"),
 		s("new/base/internal/utils/http_utils.go.tmpl", "internal/utils/http_utils.go"),
@@ -155,10 +156,14 @@ func fileSpecs(cfg *config.ProjectConfig) []FileSpec {
 			s("new/ssr/web/static.go.tmpl", "web/static.go"),
 			s("new/ssr/web/static/robots.txt", "web/static/robots.txt"),
 			s("new/ssr/web/layouts/layout.templ.tmpl", "web/layouts/layout.templ"),
-			s("new/ssr/web/components/components.templ.tmpl", "web/components/components.templ"),
 			s("new/ssr/web/components/landing.templ.tmpl", "web/components/landing.templ"),
 			s("new/ssr/web/components/error.templ.tmpl", "web/components/error.templ"),
 		)
+		if cfg.Auth {
+			specs = append(specs,
+				s("new/ssr/web/components/dashboard.templ.tmpl", "web/components/dashboard.templ"),
+			)
+		}
 		if cfg.Auth {
 			specs = append(specs,
 				s("new/ssr_auth/web/components/auth/login.templ.tmpl", "web/components/auth/login.templ"),

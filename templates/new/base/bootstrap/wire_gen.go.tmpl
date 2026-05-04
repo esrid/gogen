@@ -2,9 +2,9 @@ package bootstrap
 
 import (
 	"log/slog"
-[[- if .Auth]]
 
 	"[[.ModulePath]]/internal/adapters/api"
+[[- if .Auth]]
 	"[[.ModulePath]]/internal/adapters/external/email"
 	"[[.ModulePath]]/internal/application"
 	"[[.ModulePath]]/internal/domain"
@@ -13,7 +13,6 @@ import (
 )
 
 type Handlers struct {
-	Store *db.Store
 [[- if .Auth]]
 	Auth           *api.AuthHandler
 	SessionService domain.SessionService
@@ -24,7 +23,7 @@ type Handlers struct {
 }
 
 func WireHandlers(dbStore *db.Store, logger *slog.Logger) *Handlers {
-	h := &Handlers{Store: dbStore}
+	h := &Handlers{}
 [[- if .Auth]]
 
 	emailProvider := email.NewNoopProvider()

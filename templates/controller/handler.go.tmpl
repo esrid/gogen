@@ -1,0 +1,23 @@
+package api
+
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	"[[.ModulePath]]/internal/utils"
+)
+
+type [[.Name]]Handler struct{}
+
+func New[[.Name]]Handler() *[[.Name]]Handler {
+	return &[[.Name]]Handler{}
+}
+
+func (h *[[.Name]]Handler) Register(r chi.Router) {
+	r.Get("[[.Route]]", h.show)
+}
+
+func (h *[[.Name]]Handler) show(w http.ResponseWriter, r *http.Request) {
+	utils.WriteJSON(w, map[string]string{"page": "[[.NameLC]]"})
+}

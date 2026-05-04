@@ -15,6 +15,9 @@ func New[[.ModelName]]Service(store domain.[[.ModelName]]Store) *[[.ModelName]]S
 }
 
 func (s *[[.ModelName]]Service) Create(ctx context.Context, m domain.[[.ModelName]]) (*domain.[[.ModelName]], error) {
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
 	created, err := s.store.Create[[.ModelName]](ctx, m)
 	if err != nil {
 		return nil, err
@@ -35,6 +38,9 @@ func (s *[[$.ModelName]]Service) [[.ServiceMethod]](ctx context.Context, [[.Para
 }
 [[end]]
 func (s *[[.ModelName]]Service) Update(ctx context.Context, m domain.[[.ModelName]]) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
 	return s.store.Update[[.ModelName]](ctx, m)
 }
 

@@ -10,6 +10,7 @@ import (
 	"[[.ModulePath]]/internal/core/utils"
 [[- if .IsSSR]]
 	"[[.ModulePath]]/web"
+	"[[.ModulePath]]/web/components/auth"
 [[- end]]
 	"github.com/go-chi/chi/v5"
 )
@@ -49,68 +50,63 @@ func (h *AuthHandler) Route() http.Handler {
 }
 
 func (h *AuthHandler) showLogin(w http.ResponseWriter, r *http.Request) {
-	data := map[string]any{
+[[- if .IsSSR]]
+	web.Render(w, r, auth.Login(r.URL.Query().Get("error"), r.URL.Query().Get("msg")))
+[[- else]]
+	utils.WriteJSON(w, map[string]any{
 		"Title": "Login",
 		"Error": r.URL.Query().Get("error"),
 		"Msg":   r.URL.Query().Get("msg"),
-	}
-[[- if .IsSSR]]
-	web.Render(w, "login.html", data)
-[[- else]]
-	utils.WriteJSON(w, data)
+	})
 [[- end]]
 }
 
 func (h *AuthHandler) showSignup(w http.ResponseWriter, r *http.Request) {
-	data := map[string]any{
+[[- if .IsSSR]]
+	web.Render(w, r, auth.Signup(r.URL.Query().Get("error")))
+[[- else]]
+	utils.WriteJSON(w, map[string]any{
 		"Title": "Sign Up",
 		"Error": r.URL.Query().Get("error"),
-	}
-[[- if .IsSSR]]
-	web.Render(w, "signup.html", data)
-[[- else]]
-	utils.WriteJSON(w, data)
+	})
 [[- end]]
 }
 
 func (h *AuthHandler) showForgotPassword(w http.ResponseWriter, r *http.Request) {
-	data := map[string]any{
+[[- if .IsSSR]]
+	web.Render(w, r, auth.ForgotPassword(r.URL.Query().Get("error")))
+[[- else]]
+	utils.WriteJSON(w, map[string]any{
 		"Title": "Forgot Password",
 		"Error": r.URL.Query().Get("error"),
-	}
-[[- if .IsSSR]]
-	web.Render(w, "forgot-password.html", data)
-[[- else]]
-	utils.WriteJSON(w, data)
+	})
 [[- end]]
 }
 
 func (h *AuthHandler) showResetPassword(w http.ResponseWriter, r *http.Request) {
-	data := map[string]any{
+[[- if .IsSSR]]
+	web.Render(w, r, auth.ResetPassword(r.URL.Query().Get("token"), r.URL.Query().Get("error")))
+[[- else]]
+	utils.WriteJSON(w, map[string]any{
 		"Title": "Reset Password",
 		"Token": r.URL.Query().Get("token"),
 		"Error": r.URL.Query().Get("error"),
-	}
-[[- if .IsSSR]]
-	web.Render(w, "reset-password.html", data)
-[[- else]]
-	utils.WriteJSON(w, data)
+	})
 [[- end]]
 }
 
 func (h *AuthHandler) showSettings(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value(domains.UserContextKey).(string)
 	user, _ := h.userStore.QueryUserByID(r.Context(), userID)
-	data := map[string]any{
+[[- if .IsSSR]]
+	web.Render(w, r, auth.Settings(user, r.URL.Query().Get("error"), r.URL.Query().Get("msg")))
+[[- else]]
+	utils.WriteJSON(w, map[string]any{
 		"Title": "Settings",
 		"User":  user,
 		"Error": r.URL.Query().Get("error"),
 		"Msg":   r.URL.Query().Get("msg"),
-	}
-[[- if .IsSSR]]
-	web.Render(w, "settings.html", data)
-[[- else]]
-	utils.WriteJSON(w, data)
+	})
 [[- end]]
 }
 

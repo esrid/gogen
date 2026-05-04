@@ -1,10 +1,12 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/a-h/templ"
-	"[[.ModulePath]]/web/layouts"
+	"[[.ModulePath]]/internal/domain"
+	"[[.ModulePath]]/web/components"
 )
 
 func Render(w http.ResponseWriter, r *http.Request, component templ.Component) {
@@ -14,14 +16,16 @@ func Render(w http.ResponseWriter, r *http.Request, component templ.Component) {
 	}
 }
 
-templ Error(message string) {
-	@layouts.Layout("Error") {
-		<div class="container mx-auto p-4 text-center">
-			<h1 class="text-3xl font-bold text-error mb-4">Error</h1>
-			<p class="text-lg">{ message }</p>
-			<div class="mt-6">
-				<a href="/" class="btn btn-primary">Go Home</a>
-			</div>
-		</div>
+func RenderError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		w.WriteHeader(http.StatusNotFound)
+	case errors.Is(err, domain.ErrForbidden):
+		w.WriteHeader(http.StatusForbidden)
+	case errors.Is(err, domain.ErrUnauthorized):
+		w.WriteHeader(http.StatusUnauthorized)
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
 	}
+	Render(w, r, components.Error(err.Error()))
 }

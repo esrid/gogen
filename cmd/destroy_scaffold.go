@@ -42,7 +42,6 @@ func runDestroyScaffold(_ *cobra.Command, args []string) error {
 	data := scaffold.NewData(modelName, nil, cfg)
 	n := strings.ToLower(modelName)
 
-	t := data.TableName
 	files := []string{
 		"internal/domain/" + n + ".go",
 		"internal/domain/" + n + "_port.go",
@@ -51,10 +50,6 @@ func runDestroyScaffold(_ *cobra.Command, args []string) error {
 		"internal/adapters/api/" + n + "_handler.go",
 		"internal/adapters/api/" + n + "_api_handler.go",
 		"internal/adapters/web/" + n + "_handler.go",
-		"web/templates/pages/" + t + "_index.html",
-		"web/templates/pages/" + t + "_show.html",
-		"web/templates/pages/" + t + "_new.html",
-		"web/templates/pages/" + t + "_edit.html",
 	}
 
 	fmt.Printf("\nRemoving %s scaffold...\n\n", modelName)
@@ -63,6 +58,10 @@ func runDestroyScaffold(_ *cobra.Command, args []string) error {
 		if err := removeFile(path); err != nil {
 			return err
 		}
+	}
+
+	if err := removeDir("web/components/" + n); err != nil {
+		return err
 	}
 
 	// Find and remove matching migration(s)
@@ -95,6 +94,22 @@ func removeScaffoldMeta(cfg *config.GogenYAML, modelName string) {
 		return
 	}
 	_ = os.WriteFile(".gogen.yaml", data, 0644)
+}
+
+func removeDir(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		fmt.Printf("  skip    %s (not found)\n", path)
+		return nil
+	}
+	if flagDryRun {
+		fmt.Printf("  dryrun  %s\n", path)
+		return nil
+	}
+	if err := os.RemoveAll(path); err != nil {
+		return fmt.Errorf("remove %s: %w", path, err)
+	}
+	fmt.Printf("  remove  %s\n", path)
+	return nil
 }
 
 func removeFile(path string) error {

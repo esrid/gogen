@@ -45,9 +45,10 @@ type Data struct {
 	UpdateArgs     string // "p.Title, p.Body, p.ID"
 	PGUpdateWhereN string // "$3"
 
-	HasTimeImport   bool
-	NeedsStrconv    bool // any int or float field (needs strconv in SSR form parsing)
-	HasNonUserRefs  bool // has at least one non-user references field
+	HasTimeImport        bool
+	NeedsStrconv         bool // any int or float field (needs strconv in SSR form parsing)
+	HasNonUserRefs       bool // has at least one non-user references field
+	HasValidatableFields bool // any string or ref field (drives Validate() generation)
 
 	Protected     bool   // --protected flag: routes require auth
 	HasUserRef    bool   // has a user:references field
@@ -78,21 +79,31 @@ func NewData(modelName string, fields []Field, cfg *config.ProjectConfig) *Data 
 			d.NeedsStrconv = true
 		}
 		if f.IsRef {
-			// derive singular model name from table: "users" → "User"
-			singular := singularize(f.RefTable)
-			refModel := ToCamel(singular)
-			paramName := strings.ToLower(refModel[:1]) + refModel[1:] + "ID"
+			d.HasValidatableFields = true
+		}
+		if f.IsRef {
+			// derive singular model name from ref table: "users" → "User"
+			refModel := ToCamel(singularize(f.RefTable))
 
-			isUserRef := f.RefTable == "users"
+			// Use field alias (not ref model) for method/route names so two
+			// fields pointing to the same table don't produce collisions.
+			// e.g. manager:user:references → field "manager_id" → byAlias "manager"
+			byAlias := strings.TrimSuffix(f.Name, "_id")
+			byModel := ToCamel(byAlias)
+			paramName := strings.ToLower(byModel[:1]) + byModel[1:] + "ID"
+
+			// Only treat as user ref when the column is literally user_id.
+			// Aliased refs to users (e.g. manager_id → users) are regular refs.
+			isUserRef := f.Name == "user_id"
 			assoc := RefAssoc{
 				FieldGoName:   f.GoName,
 				FieldName:     f.Name,
 				RefModel:      refModel,
 				RefTable:      f.RefTable,
-				StoreMethod:   "List" + modelName + "sBy" + refModel + "ID",
-				ServiceMethod: "ListBy" + refModel + "ID",
+				StoreMethod:   "List" + modelName + "sBy" + byModel + "ID",
+				ServiceMethod: "ListBy" + byModel + "ID",
 				ParamName:     paramName,
-				URLSegment:    singularize(f.RefTable),
+				URLSegment:    byAlias,
 				IsUserRef:     isUserRef,
 			}
 			d.Refs = append(d.Refs, assoc)

@@ -136,10 +136,10 @@ func scaffoldSpecs(data *scaffold.Data) []scaffoldSpec {
 
 	if data.IsSSR() {
 		specs = append(specs,
-			scaffoldSpec{"scaffold/pages/index.templ.tmpl", "web/templates/components/" + n + "/index.templ"},
-			scaffoldSpec{"scaffold/pages/show.templ.tmpl", "web/templates/components/" + n + "/show.templ"},
-			scaffoldSpec{"scaffold/pages/new.templ.tmpl", "web/templates/components/" + n + "/new.templ"},
-			scaffoldSpec{"scaffold/pages/edit.templ.tmpl", "web/templates/components/" + n + "/edit.templ"},
+			scaffoldSpec{"scaffold/components/index.templ.tmpl", "web/components/" + n + "/index.templ"},
+			scaffoldSpec{"scaffold/components/show.templ.tmpl", "web/components/" + n + "/show.templ"},
+			scaffoldSpec{"scaffold/components/new.templ.tmpl", "web/components/" + n + "/new.templ"},
+			scaffoldSpec{"scaffold/components/edit.templ.tmpl", "web/components/" + n + "/edit.templ"},
 		)
 	}
 
