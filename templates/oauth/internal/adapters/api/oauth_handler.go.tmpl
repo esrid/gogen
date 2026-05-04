@@ -1,0 +1,83 @@
+package api
+
+import (
+	"net/http"
+	"os"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/sessions"
+	"github.com/markbates/goth"
+	"github.com/markbates/goth/gothic"
+[[- range .Providers]]
+	"[[.GothImport]]"
+[[- end]]
+
+	"[[.ModulePath]]/internal/domain"
+	"[[.ModulePath]]/internal/utils"
+)
+
+type OAuthHandler struct {
+	store   domain.OAuthStore
+	session domain.SessionService
+}
+
+func NewOAuthHandler(store domain.OAuthStore, session domain.SessionService) *OAuthHandler {
+	key := os.Getenv("SESSION_SECRET")
+	if key == "" {
+		key = "dev-secret-change-in-production"
+	}
+	gothic.Store = sessions.NewCookieStore([]byte(key))
+
+	base := os.Getenv("APP_URL")
+	goth.UseProviders(
+[[- range .Providers]]
+[[- if .IsApple]]
+		apple.New(os.Getenv("APPLE_CLIENT_ID"), os.Getenv("APPLE_TEAM_ID"), os.Getenv("APPLE_KEY_ID"), os.Getenv("APPLE_PRIVATE_KEY"), base+"/auth/oauth/apple/callback"),
+[[- else]]
+		[[.GothPkg]].New(os.Getenv("[[.EnvPrefix]]_CLIENT_ID"), os.Getenv("[[.EnvPrefix]]_CLIENT_SECRET"), base+"/auth/oauth/[[.Name]]/callback"),
+[[- end]]
+[[- end]]
+	)
+	return &OAuthHandler{store: store, session: session}
+}
+
+func (h *OAuthHandler) Register(r chi.Router) {
+	r.Get("/auth/oauth/{provider}", h.begin)
+	r.Get("/auth/oauth/{provider}/callback", h.callback)
+}
+
+func (h *OAuthHandler) begin(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(gothic.GetContextWithProvider(r.Context(), chi.URLParam(r, "provider")))
+	gothic.BeginAuthHandler(w, r)
+}
+
+func (h *OAuthHandler) callback(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(gothic.GetContextWithProvider(r.Context(), chi.URLParam(r, "provider")))
+
+	gothUser, err := gothic.CompleteUserAuth(w, r)
+	if err != nil {
+[[- if .IsSSR]]
+		http.Redirect(w, r, "/auth/login?error=oauth_failed", http.StatusSeeOther)
+[[- else]]
+		utils.WriteJSONError(w, http.StatusUnauthorized, "oauth_failed")
+[[- end]]
+		return
+	}
+
+	_, token, err := h.store.UpsertOAuthUser(r.Context(), gothUser.Provider, gothUser.UserID, gothUser.Email, gothUser.Name)
+	if err != nil {
+[[- if .IsSSR]]
+		http.Redirect(w, r, "/auth/login?error=oauth_error", http.StatusSeeOther)
+[[- else]]
+		utils.WriteJSONError(w, http.StatusInternalServerError, "oauth_error")
+[[- end]]
+		return
+	}
+
+	utils.SetSessionCookie(w, r, "session_token", token, false)
+[[- if .IsSSR]]
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+[[- else]]
+	utils.WriteJSON(w, map[string]string{"token": token})
+[[- end]]
+}

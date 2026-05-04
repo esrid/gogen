@@ -97,7 +97,11 @@ func (h *AuthHandler) showResetPassword(w http.ResponseWriter, r *http.Request) 
 
 func (h *AuthHandler) showSettings(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value(domains.UserContextKey).(string)
-	user, _ := h.userStore.QueryUserByID(r.Context(), userID)
+	user, err := h.userStore.QueryUserByID(r.Context(), userID)
+	if err != nil || user == nil {
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		return
+	}
 [[- if .IsSSR]]
 	web.Render(w, r, auth.Settings(user, r.URL.Query().Get("error"), r.URL.Query().Get("msg")))
 [[- else]]

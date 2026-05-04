@@ -48,11 +48,20 @@ type ControllerMeta struct {
 	Protected bool   `yaml:"protected,omitempty"`
 }
 
+type OAuthConfig struct {
+	Providers []string `yaml:"providers,omitempty"`
+}
+
 type GogenYAML struct {
-	Module      string                      `yaml:"module"`
-	DB          string                      `yaml:"db"`
-	RenderMode  string                      `yaml:"render_mode"`
-	Auth        bool                        `yaml:"auth"`
-	Scaffolds   map[string]*ScaffoldMeta    `yaml:"scaffolds,omitempty"`
-	Controllers map[string]*ControllerMeta  `yaml:"controllers,omitempty"`
+	Module      string                     `yaml:"module"`
+	DB          string                     `yaml:"db"`
+	RenderMode  string                     `yaml:"render_mode"`
+	Auth        bool                       `yaml:"auth"`
+	OAuth       *OAuthConfig               `yaml:"oauth,omitempty"`
+	Scaffolds   map[string]*ScaffoldMeta   `yaml:"scaffolds,omitempty"`
+	Controllers map[string]*ControllerMeta `yaml:"controllers,omitempty"`
+}
+
+func (g *GogenYAML) HasOAuth() bool {
+	return g.OAuth != nil && len(g.OAuth.Providers) > 0
 }

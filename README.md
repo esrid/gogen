@@ -17,6 +17,7 @@ Requires Go 1.26+.
 | `gogen new` | | Create a new project |
 | `gogen generate migration` | `gogen g migration` | Add a migration file |
 | `gogen generate auth` | `gogen g auth` | Add auth to an existing project |
+| `gogen generate oauth` | `gogen g oauth` | Add OAuth2 social login providers |
 | `gogen generate scaffold` | `gogen g s` | Generate full CRUD for a model |
 | `gogen generate attribute` | `gogen g a` | Add fields to an existing scaffold |
 | `gogen generate api` | `gogen g api` | Add JSON API handler to an SSR scaffold |
@@ -70,7 +71,7 @@ myapp/
 ├── .gogen.yaml                          # project metadata for generate commands
 ├── bootstrap/
 │   ├── app.go                           # Run() — DB init + server start
-│   ├── config.go                        # env-based config
+│   ├── config.go                        # env-based config (autoloads .env)
 │   ├── server.go                        # graceful shutdown
 │   ├── router.go                        # chi router + middleware (auto-updated)
 │   └── wire_gen.go                      # Handlers struct + WireHandlers (auto-updated)
@@ -127,6 +128,7 @@ myapp/
 | Postgres | [pgx/v5](https://github.com/jackc/pgx) |
 | Migrations | [goose v3](https://github.com/pressly/goose) (embedded SQL) |
 | Templates | [templ](https://templ.guide) — type-safe Go SSR components |
+| Env vars | [godotenv/autoload](https://github.com/joho/godotenv) — loads `.env` at startup |
 | Password | bcrypt with sha256 pre-hashing |
 
 **Docker**
@@ -144,20 +146,43 @@ Both SQLite (`modernc.org/sqlite`) and Postgres (`pgx/v5`) are pure Go — no CG
 
 ## gogen generate migration
 
-Create a numbered migration file in `internal/adapters/db/migrations/`.
+Create a numbered migration file in `internal/adapters/db/migrations/`. Reads `.gogen.yaml` for the DB dialect.
 
 ```sh
-gogen g migration <name>
+gogen g migration <name> [field:type ...]
 ```
 
-Must be run from inside a gogen project (reads `.gogen.yaml` for DB dialect).
+**Smart name parsing**
 
-**Example**
+When the migration name follows a Rails-style convention and field args are provided, gogen generates the SQL automatically.
+
+| Pattern | Args | Generated SQL |
+|---------|------|---------------|
+| `AddXxxToTable` | `field:type ...` | `ALTER TABLE table ADD COLUMN ...` |
+| `RemoveXxxFromTable` | `field:type ...` | `ALTER TABLE table DROP COLUMN ...` |
+| `RenameOldToNewInTable` | *(none)* | `ALTER TABLE table RENAME COLUMN old TO new` |
+
+**Examples**
 
 ```sh
+# Empty skeleton
 gogen g migration add_avatar_to_users
-# creates: internal/adapters/db/migrations/00002_add_avatar_to_users.sql
+# → 00002_add_avatar_to_users.sql  (empty Up/Down)
+
+# Add columns
+gogen g migration AddStatusToOrders status:string
+# → ALTER TABLE orders ADD COLUMN status TEXT NOT NULL DEFAULT '';
+
+# Remove columns
+gogen g migration RemoveStatusFromOrders status:string
+# → ALTER TABLE orders DROP COLUMN status;
+
+# Rename a column
+gogen g migration RenamePartNumberToSkuInProducts
+# → ALTER TABLE products RENAME COLUMN part_number TO sku;
 ```
+
+Down migrations are generated automatically (reverse of Up). Reference fields also create/drop the index in the Down block.
 
 ---
 
@@ -178,6 +203,7 @@ Must be run from inside a gogen project with `auth: false` in `.gogen.yaml`.
 - Re-wires all existing scaffolds in `wire_gen.go` and `router.go`
 - Creates a new migration (`NNNNN_add_auth.sql`) with the auth tables
 - Adds SSR auth templ components if the project uses SSR
+- Adds `User` to `.gogen.yaml` scaffolds so `gogen g attribute User` works
 - Updates `.gogen.yaml` to `auth: true`
 
 **Auth tables created**
@@ -201,6 +227,86 @@ Must be run from inside a gogen project with `auth: false` in `.gogen.yaml`.
 | `GET` | `/auth/settings` | Settings page (authenticated) |
 | `POST` | `/auth/settings/password` | Change password (authenticated) |
 | `POST` | `/auth/settings/delete` | Delete account (authenticated) |
+
+**Adding fields to the User model**
+
+Use `gogen g attribute User` to add columns to the `users` table. Regenerates `internal/domain/user.go` and creates the migration. The auth store, service, and handler are left untouched.
+
+```sh
+gogen g attribute User role:string plan:string
+# → NNNNN_add_role_plan_to_users.sql
+# → internal/domain/user.go updated with Role, Plan fields
+```
+
+After running, update `internal/adapters/db/auth_store.go` to SELECT/INSERT the new columns.
+
+---
+
+## gogen generate oauth
+
+Add OAuth2 social login to a project that already has auth enabled. Supports Google, Apple, and Microsoft.
+
+```sh
+gogen g oauth <provider...>
+```
+
+Requires `auth: true` in `.gogen.yaml`. Can be run multiple times to add more providers.
+
+**Supported providers**
+
+| Provider | Env vars required |
+|----------|-------------------|
+| `google` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
+| `microsoft` | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` |
+| `apple` | `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` |
+
+Also requires `APP_URL` (e.g. `https://yourapp.com`) for callback URLs.
+
+**Examples**
+
+```sh
+gogen g oauth google
+gogen g oauth google apple microsoft
+```
+
+**What it generates (first run)**
+
+```
+internal/adapters/db/migrations/NNNNN_add_oauth_to_users.sql   # adds provider + provider_id columns
+internal/domain/oauth_port.go                                   # OAuthStore interface
+internal/adapters/db/oauth_store.go                             # UpsertOAuthUser implementation
+internal/adapters/api/oauth_handler.go                          # OAuth routes
+```
+
+On subsequent runs (adding more providers), only `oauth_handler.go` is regenerated to register the new provider.
+
+**OAuth routes**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/auth/oauth/{provider}` | Redirect to provider |
+| `GET` | `/auth/oauth/{provider}/callback` | Handle callback, create session |
+
+**Account linking**
+
+On callback, `UpsertOAuthUser` resolves the user in order:
+
+1. Find by `(provider, provider_id)` — returning user
+2. Find by email — links the OAuth identity to the existing account
+3. Neither — creates a new user
+
+**Install deps in your project**
+
+```sh
+go get github.com/markbates/goth github.com/gorilla/sessions
+```
+
+**`.gogen.yaml` tracking**
+
+```yaml
+oauth:
+  providers: [google, apple]
+```
 
 ---
 
@@ -358,11 +464,6 @@ func WireHandlers(dbStore *db.Store, logger *slog.Logger) *Handlers {
     h.Post = api.NewPostHandler(postSvc, logger)
     return h
 }
-
-// bootstrap/router.go (mount injected automatically)
-if h.Post != nil {
-    h.Post.Register(r)
-}
 ```
 
 ---
@@ -375,7 +476,7 @@ Add new fields to an existing scaffold. Updates the domain, store, and handler; 
 gogen g attribute <ModelName> field:type [field:type ...]
 ```
 
-Must be run from inside a gogen project. The model must already exist (created via `gogen g scaffold`).
+Must be run from inside a gogen project. The model must already exist (created via `gogen g scaffold` or `gogen g auth`).
 
 **Example**
 
@@ -392,6 +493,17 @@ What it does:
 Accepts the same field types as `gogen g scaffold`. Duplicate fields are rejected.
 
 > SSR views are not regenerated by default to preserve any customisations you've made. Pass `--views` to overwrite them.
+
+**Auth User model**
+
+`gogen g attribute User` is supported after `gogen g auth`. It regenerates `internal/domain/user.go` using the auth-aware template (preserving all auth logic) and creates the migration. The auth store, service, and handler are not touched — update `auth_store.go` manually to SELECT/INSERT the new columns.
+
+```sh
+gogen g attribute User role:string
+# → NNNNN_add_role_to_users.sql
+# → internal/domain/user.go  (Role string field added to User struct)
+# → hint: update auth_store.go SELECT/INSERT
+```
 
 ---
 

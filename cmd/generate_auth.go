@@ -179,6 +179,15 @@ func createAuthMigration(db string) error {
 
 func setAuthInGogenYAML(cfg *config.GogenYAML) error {
 	cfg.Auth = true
+	if cfg.Scaffolds == nil {
+		cfg.Scaffolds = make(map[string]*config.ScaffoldMeta)
+	}
+	if _, ok := cfg.Scaffolds["User"]; !ok {
+		cfg.Scaffolds["User"] = &config.ScaffoldMeta{
+			Fields:    []string{"email:string", "full_name:string", "avatar_url:string", "timezone:string"},
+			Protected: true,
+		}
+	}
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return err

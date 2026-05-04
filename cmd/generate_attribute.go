@@ -85,6 +85,26 @@ func runGenerateAttribute(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  dryrun  internal/adapters/db/migrations/NNNNN_add_cols_to_%s.sql\n", data.TableName)
 	}
 
+	// Auth User model: only regenerate domain/user.go with auth template; skip scaffold templates.
+	if gogenCfg.Auth && modelName == "User" {
+		extraFields := authUserExtraFields(allFields)
+		extraData := scaffold.NewData("User", extraFields, cfg)
+		if err := regenFile("new/auth/internal/domain/user_with_extras.go.tmpl", "internal/domain/user.go", extraData); err != nil {
+			return err
+		}
+		fmt.Println("\n  hint    update internal/adapters/db/auth_store.go to SELECT/INSERT the new column(s)")
+		fmt.Println("\nDone.")
+		if !flagDryRun {
+			meta.Fields = append(meta.Fields, newFieldArgs...)
+			yamlData, err := yaml.Marshal(gogenCfg)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(".gogen.yaml", yamlData, 0644)
+		}
+		return nil
+	}
+
 	// Regenerate domain, port, service, store, handler(s) (force overwrite)
 	n := strings.ToLower(modelName)
 	regenSpecs := []scaffoldSpec{
@@ -163,6 +183,20 @@ func regenFile(tmplPath, outPath string, data *scaffold.Data) error {
 	}
 	fmt.Printf("  update  %s\n", outPath)
 	return nil
+}
+
+var authUserBuiltinFields = map[string]bool{
+	"email": true, "full_name": true, "avatar_url": true, "timezone": true,
+}
+
+func authUserExtraFields(all []scaffold.Field) []scaffold.Field {
+	var extra []scaffold.Field
+	for _, f := range all {
+		if !authUserBuiltinFields[f.Name] {
+			extra = append(extra, f)
+		}
+	}
+	return extra
 }
 
 func createAttributeMigration(data *scaffold.Data, newFields []scaffold.Field, db string) error {

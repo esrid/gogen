@@ -1,0 +1,65 @@
+package db
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+)
+
+func (s *Store) UpsertOAuthUser(ctx context.Context, provider, providerID, email, name string) (string, string, error) {
+	var userID string
+
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return "", "", err
+	}
+	defer tx.Rollback()
+
+	// find by provider + providerID
+	err = tx.QueryRowContext(ctx,
+		`SELECT id FROM users WHERE provider = ? AND provider_id = ? AND deleted_at IS NULL`,
+		provider, providerID,
+	).Scan(&userID)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		// try link by email
+		linkErr := tx.QueryRowContext(ctx,
+			`SELECT id FROM users WHERE email = ? AND deleted_at IS NULL`,
+			email,
+		).Scan(&userID)
+
+		if errors.Is(linkErr, sql.ErrNoRows) {
+			// create new user
+			userID = generateID()
+			if _, err = tx.ExecContext(ctx,
+				`INSERT INTO users (id, email, full_name, provider, provider_id) VALUES (?, ?, ?, ?, ?)`,
+				userID, email, name, provider, providerID,
+			); err != nil {
+				return "", "", err
+			}
+		} else if linkErr != nil {
+			return "", "", linkErr
+		} else {
+			// link provider to existing account
+			if _, err = tx.ExecContext(ctx,
+				`UPDATE users SET provider = ?, provider_id = ? WHERE id = ?`,
+				provider, providerID, userID,
+			); err != nil {
+				return "", "", err
+			}
+		}
+	} else if err != nil {
+		return "", "", err
+	}
+
+	token := generateID()
+	sessionID := generateID()
+	if _, err = tx.ExecContext(ctx,
+		`INSERT INTO sessions (id, user_id, token, expires_at) VALUES (?, ?, ?, DATETIME('now', '+30 days'))`,
+		sessionID, userID, token,
+	); err != nil {
+		return "", "", err
+	}
+
+	return userID, token, tx.Commit()
+}

@@ -22,6 +22,15 @@ func WireGenContent(cfg *config.GogenYAML) []byte {
 	}
 	sort.Strings(ctrlNames)
 
+	if cfg.Auth {
+		filtered := names[:0]
+		for _, n := range names {
+			if n != "User" {
+				filtered = append(filtered, n)
+			}
+		}
+		names = filtered
+	}
 	hasScaffolds := len(names) > 0
 	hasControllers := len(ctrlNames) > 0
 	isSSR := cfg.RenderMode == "ssr" || cfg.RenderMode == "both"
@@ -62,6 +71,9 @@ func WireGenContent(cfg *config.GogenYAML) []byte {
 		b.WriteString("\tAuth           *api.AuthHandler\n")
 		b.WriteString("\tSessionService domain.SessionService\n")
 	}
+	if cfg.HasOAuth() {
+		b.WriteString("\tOAuth *api.OAuthHandler\n")
+	}
 	for _, name := range names {
 		meta := cfg.Scaffolds[name]
 		if isSSR {
@@ -94,6 +106,10 @@ func WireGenContent(cfg *config.GogenYAML) []byte {
 		b.WriteString("\th.SessionService = sessionSvc\n")
 		b.WriteString("\th.Auth = api.NewAuthHandler(application.NewAuthService(dbStore, emailProvider), dbStore, sessionSvc, logger)\n")
 		b.WriteString("\th.PublicControllers = append(h.PublicControllers, h.Auth)\n")
+		if cfg.HasOAuth() {
+			b.WriteString("\th.OAuth = api.NewOAuthHandler(dbStore, sessionSvc)\n")
+			b.WriteString("\th.PublicControllers = append(h.PublicControllers, h.OAuth)\n")
+		}
 	}
 
 	for _, name := range names {

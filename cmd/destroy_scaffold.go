@@ -77,23 +77,25 @@ func runDestroyScaffold(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	removeScaffoldMeta(gogenCfg, modelName)
+	if err := removeScaffoldMeta(gogenCfg, modelName); err != nil {
+		fmt.Printf("  warn    could not update .gogen.yaml: %v\n", err)
+	}
 	removeWireScaffold(data, gogenCfg)
 
 	fmt.Println("\nDone.")
 	return nil
 }
 
-func removeScaffoldMeta(cfg *config.GogenYAML, modelName string) {
+func removeScaffoldMeta(cfg *config.GogenYAML, modelName string) error {
 	if cfg.Scaffolds == nil {
-		return
+		return nil
 	}
 	delete(cfg.Scaffolds, modelName)
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
-		return
+		return err
 	}
-	_ = os.WriteFile(".gogen.yaml", data, 0644)
+	return os.WriteFile(".gogen.yaml", data, 0644)
 }
 
 func removeDir(path string) error {

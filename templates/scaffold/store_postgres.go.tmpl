@@ -10,18 +10,24 @@ import (
 )
 
 func (s *Store) Create[[.ModelName]](ctx context.Context, p domain.[[.ModelName]]) (domain.[[.ModelName]], error) {
-	rows, _ := s.Pool.Query(ctx,
+	rows, err := s.Pool.Query(ctx,
 		`INSERT INTO [[.TableName]] ([[.InsertCols]]) VALUES ([[.PGInsert]]) RETURNING [[.SelectCols]]`,
 		[[.InsertArgs]],
 	)
+	if err != nil {
+		return domain.[[.ModelName]]{}, err
+	}
 	return pgx.CollectOneRow(rows, pgx.RowToStructByPos[domain.[[.ModelName]]])
 }
 
 func (s *Store) Get[[.ModelName]](ctx context.Context, id string) (*domain.[[.ModelName]], error) {
-	rows, _ := s.Pool.Query(ctx,
+	rows, err := s.Pool.Query(ctx,
 		`SELECT [[.SelectCols]] FROM [[.TableName]] WHERE id = $1`,
 		id,
 	)
+	if err != nil {
+		return nil, err
+	}
 	p, err := pgx.CollectOneRow(rows, pgx.RowToStructByPos[domain.[[.ModelName]]])
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrNotFound
@@ -30,17 +36,23 @@ func (s *Store) Get[[.ModelName]](ctx context.Context, id string) (*domain.[[.Mo
 }
 
 func (s *Store) List[[.ModelName]]s(ctx context.Context) ([]domain.[[.ModelName]], error) {
-	rows, _ := s.Pool.Query(ctx,
+	rows, err := s.Pool.Query(ctx,
 		`SELECT [[.SelectCols]] FROM [[.TableName]] ORDER BY created_at DESC`,
 	)
+	if err != nil {
+		return nil, err
+	}
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[domain.[[.ModelName]]])
 }
 [[range .Refs]]
 func (s *Store) [[.StoreMethod]](ctx context.Context, [[.ParamName]] string) ([]domain.[[$.ModelName]], error) {
-	rows, _ := s.Pool.Query(ctx,
+	rows, err := s.Pool.Query(ctx,
 		`SELECT [[$.SelectCols]] FROM [[$.TableName]] WHERE [[.FieldName]] = $1 ORDER BY created_at DESC`,
 		[[.ParamName]],
 	)
+	if err != nil {
+		return nil, err
+	}
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[domain.[[$.ModelName]]])
 }
 [[end]]

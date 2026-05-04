@@ -3,7 +3,7 @@ package bootstrap
 import (
 	"os"
 
-	"github.com/joho/godotenv"
+	_ "github.com/joho/godotenv/autoload"
 )
 
 type Config struct {
@@ -13,7 +13,6 @@ type Config struct {
 }
 
 func Load() *Config {
-	_ = godotenv.Load()
 	return &Config{
 		Environment: getEnv("ENVIRONMENT", "dev"),
 		DatabaseURL: getEnv("DATABASE_URL", [[if .IsSQLite]]"[[.ProjectName]].db"[[else]]"postgres://admin:password@localhost:5432/[[.ProjectName]]?sslmode=disable"[[end]]),

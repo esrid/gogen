@@ -1,0 +1,7 @@
+package domain
+
+import "context"
+
+type OAuthStore interface {
+	UpsertOAuthUser(ctx context.Context, provider, providerID, email, name string) (userID, token string, err error)
+}

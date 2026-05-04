@@ -1,0 +1,8 @@
+- when i generate app with auth or add auth it do not add the user into .gogen so when i try to add role when need to fix it 
+
+- make migration work like this 
+bin/rails generate migration AddPartNumberToProducts part_number:string
+bin/rails generate migration RemovePartNumberFromProducts part_number:string
+so it understand the then and update the query field field exect the views :
+
+

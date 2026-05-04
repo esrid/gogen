@@ -1,0 +1,57 @@
+package db
+
+import (
+	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5"
+)
+
+func (s *Store) UpsertOAuthUser(ctx context.Context, provider, providerID, email, name string) (string, string, error) {
+	var userID, token string
+
+	err := s.withTx(ctx, func(tx pgx.Tx) error {
+		// find by provider + providerID
+		err := tx.QueryRow(ctx,
+			`SELECT id FROM users WHERE provider = $1 AND provider_id = $2 AND deleted_at IS NULL`,
+			provider, providerID,
+		).Scan(&userID)
+
+		if errors.Is(err, pgx.ErrNoRows) {
+			// try link by email
+			linkErr := tx.QueryRow(ctx,
+				`SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL`,
+				email,
+			).Scan(&userID)
+
+			if errors.Is(linkErr, pgx.ErrNoRows) {
+				// create new user
+				if err = tx.QueryRow(ctx,
+					`INSERT INTO users (email, full_name, provider, provider_id) VALUES ($1, $2, $3, $4) RETURNING id`,
+					email, name, provider, providerID,
+				).Scan(&userID); err != nil {
+					return err
+				}
+			} else if linkErr != nil {
+				return linkErr
+			} else {
+				// link provider to existing account
+				if _, err = tx.Exec(ctx,
+					`UPDATE users SET provider = $1, provider_id = $2 WHERE id = $3`,
+					provider, providerID, userID,
+				); err != nil {
+					return err
+				}
+			}
+		} else if err != nil {
+			return err
+		}
+
+		return tx.QueryRow(ctx,
+			`INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, gen_random_uuid()::text, NOW() + INTERVAL '30 days') RETURNING token`,
+			userID,
+		).Scan(&token)
+	})
+
+	return userID, token, err
+}
