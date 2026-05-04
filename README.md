@@ -1,6 +1,9 @@
 # gogen
 
-Rails-style Go project generator. Generates production-ready hexagonal architecture projects with a single command.
+> [!WARNING]
+> This project is experimental. Use it at your own risk.
+
+Rails-style Go project generator. Generates hexagonal architecture projects with a single command.
 
 ## Install
 
