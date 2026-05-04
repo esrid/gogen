@@ -225,8 +225,11 @@ Must be run from inside a gogen project (reads `.gogen.yaml`). Auto-updates `boo
 | `time` | `time.Time` | `DATETIME` | `TIMESTAMPTZ` |
 | `uuid` | `string` | `TEXT NOT NULL DEFAULT ''` | `UUID NOT NULL DEFAULT gen_random_uuid()` |
 | `references` | `string` | `TEXT NOT NULL REFERENCES {table}(id) ON DELETE CASCADE` | `UUID NOT NULL REFERENCES {table}(id) ON DELETE CASCADE` |
+| `user:references` | `string` | `TEXT REFERENCES users(id) ON DELETE SET NULL` | `UUID REFERENCES users(id) ON DELETE SET NULL` |
 
 `references` is convention-based: `post:references` → `post_id` column → FK to `posts(id)`. Table name is auto-pluralized (`category` → `categories`).
+
+`user:references` (the literal form, column `user_id`) is generated as **nullable**. On non-protected routes, anonymous callers produce a record with `user_id = NULL`; authenticated callers get their ID injected automatically. On `--protected` routes, `RequireAuth` ensures a user is always present so NULL never occurs in practice.
 
 When you need two FK columns pointing to the same table, use the aliased form `alias:model:references`:
 
